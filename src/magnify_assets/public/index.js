@@ -33,6 +33,8 @@ let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
 let initiatorTimer
+let waitForIceDelay
+let iceCones = []
 
 const onTrack = event => {
   console.log("addtrack")
@@ -48,6 +50,12 @@ const onTrack = event => {
 // Needed for cross-machine calls
 const onIceCandidate = event => {
   console.log("onIceCandidate:", event)
+  if (event.candidate) {
+    iceCones.push({
+      label: event.candidate.sdpMLineIndex,
+      candidate: event.candidate.candidate
+    })
+  }
 }
 
 const sendOffer = recipient => {
@@ -68,7 +76,12 @@ const sendOffer = recipient => {
     rtcPeerConnection.createOffer().then(offer => {
       return rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
-      magnify.offer(recipient, JSON.stringify(rtcPeerConnection.localDescription))
+      waitForIceDelay = setTimeout(() => {
+        magnify.offer(recipient, JSON.stringify({
+          ice: iceCones,
+          description: rtcPeerConnection.localDescription
+        }))
+      }, 2000)
     })
     .catch(e => console.log(e))
 
@@ -82,7 +95,15 @@ const pollAnswer = () => {
   let answers = magnify.answers().then(answers => {
     console.log(answers.length)
     if (answers.length > 0) {
-      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answers[0].answer)))
+      var details = JSON.parse(answers[0].answer)
+      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+      for (const c of details.ice) {
+        const candidate = new RTCIceCandidate({
+          sdpMLineIndex: c.label,
+          candidate: c.candidate
+        })
+        rtcPeerConnection.addIceCandidate(candidate)
+      }
       clearInterval(initiatorTimer)
     }
   })
@@ -104,12 +125,29 @@ const sendAnswer = () => {
     }
 
     console.log("offer.offer", offer.offer)
-    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer.offer)))
+    var details = JSON.parse(offer.offer)
+    console.log("Done parsing")
+    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+    console.log("setting ice")
+    for (const c of details.ice) {
+      const candidate = new RTCIceCandidate({
+        sdpMLineIndex: c.label,
+        candidate: c.candidate
+      })
+      rtcPeerConnection.addIceCandidate(candidate)
+    }
 
+    console.log("creating answer")
     rtcPeerConnection.createAnswer().then(answer => {
+      console.log("setting local desc")
       return rtcPeerConnection.setLocalDescription(answer)
     }).then(() => {
-      magnify.answer(offer.initiator, JSON.stringify(rtcPeerConnection.localDescription))
+      waitForIceDelay = setTimeout(() => {
+        magnify.answer(offer.initiator, JSON.stringify({
+          description: rtcPeerConnection.localDescription,
+          ice: iceCones
+        }))
+      }, 2000)
     })
     .catch(e => console.log(e))
   })
