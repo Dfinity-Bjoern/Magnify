@@ -28,7 +28,8 @@ function generateWebpackConfigForCanister(name, info) {
     },
     devtool: "source-map",
     optimization: {
-      minimize: true,
+      // TODO Set to true before deployment
+      minimize: false,
       minimizer: [new TerserPlugin()],
     },
     resolve: {
