@@ -31,7 +31,7 @@ let localVideo = $("#localVideo")
 let remoteStream
 let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
-let iceServers = { iceServers: [{ url: "stun:stun.services.mozilla.com" }] }
+let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
 
 const onAddStream = event => {
   remoteVideo.srcObject = event.stream
