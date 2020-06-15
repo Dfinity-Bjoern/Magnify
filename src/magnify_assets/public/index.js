@@ -24,67 +24,90 @@ document.body.innerHTML = /*html*/`
   </div>
 `;
 
-let localStream;
+let allOffers = []
+
+let localStream
 let localVideo = $("#localVideo")
+let remoteStream
 let remoteVideo = $("#remoteVideo")
-let isCaller;
-let rtcPeerConnection;
+let rtcPeerConnection
 let iceServers = { iceServers: [{ url: "stun:stun.services.mozilla.com" }] }
 
 const onAddStream = event => {
-  remoteVideo.src = URL.createObjectURL(event.stream)
+  remoteVideo.srcObject = event.stream
   remoteStream = event.stream
 }
 
+// Needed for cross-machine calls
 const onIceCandidate = event => {
-  console.log(`onIceCandidate: ${event}`)
+  console.log("onIceCandidate:", event)
 }
 
 const setLocalAndOffer = recipient => sessionDescription => {
   rtcPeerConnection.setLocalDescription(sessionDescription)
   magnify.offer(recipient, JSON.stringify(sessionDescription))
 }
+
+const setLocalAndAnswer = initiator => sessionDescription => {
+  rtcPeerConnection.setLocalDescription(sessionDescription)
+  magnify.answer(initiator, JSON.stringify(sessionDescription))
 }
 
 const sendOffer = recipient => {
   // TODO(Christoph): video to true
   navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
-    localStream = stream;
-    localVideo.src = URL.createObjectURL(stream);
-    isCaller = true;
-  })
-  .then(() => {
+    console.log("stream", stream)
+    localStream = stream
+    localVideo.srcObject = stream
+
     rtcPeerConnection = new RTCPeerConnection(iceServers)
     rtcPeerConnection.onicecandidate = onIceCandidate
     rtcPeerConnection.onaddstream = onAddStream
 
     rtcPeerConnection.addStream(localStream)
-    rtcPeerConnection.createOffer(setLocalAndOffer, e => console.log(e))
+    rtcPeerConnection.createOffer(setLocalAndOffer(recipient), e => console.log(e))
   })
   .catch(err => console.error(`Failed to connect 1: ${err}`))
 }
 
-const sendAnswer = initiator => magnify.answer(initiator, "answerSDP")
+const sendAnswer = () => {
+  const offer = allOffers[0]
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+    console.log("answer stream", stream)
+    localStream = stream
+    localVideo.srcObject = stream
+
+    rtcPeerConnection = new RTCPeerConnection(iceServers)
+    rtcPeerConnection.onicecandidate = onIceCandidate
+    rtcPeerConnection.onaddstream = onAddStream
+
+    rtcPeerConnection.addStream(localStream)
+
+    console.log("offer.offer", offer.offer)
+    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer.offer)))
+
+    rtcPeerConnection.createAnswer(setLocalAndAnswer(offer.initiator), e => console.log(e))
+  })
+  .catch(err => console.error(`Failed to connect 2: ${err}`))
+}
 
 $("#offerButton").addEventListener("click", ev => {
   const callerId = $("#partnerInput").value;
-  sendOffer(principalFromHex(callerId)).then(() => {
-    console.log(`Sent an offer to: ${callerId}`)
-  })
+  sendOffer(principalFromHex(callerId))
 })
 
 $("#answerButton").addEventListener("click", ev => {
-  const partnerId = $("#partnerInput").value;
-  sendAnswer(principalFromHex(partnerId)).then(() => {
-    console.log(`Sent an answer to: ${partnerId}`)
-  })
+  // TODO Actually select the offer you want to answer
+  sendAnswer()
 })
 
 $("#listOffersButton").addEventListener("click", ev => {
   const ul = $("#offers");
   magnify.offers().then(offers => {
+    allOffers = offers
     ul.textContent = '';
     offers.forEach(offer => {
+      console.log(offer)
       const newLi = document.createElement("li")
       newLi.textContent = `${offer.initiator._idHex} => ${offer.recipient._idHex}`
       ul.appendChild(newLi)
