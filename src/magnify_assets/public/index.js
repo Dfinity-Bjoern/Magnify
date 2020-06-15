@@ -6,14 +6,18 @@ import magnify from 'ic:canisters/magnify';
 
 magnify.ping().then(caller => {
   document.body.innerHTML = `Hallo ${caller._idHex}`;
-  magnify.offer(caller, "sdp")
-}).then(
-  () => {
-    magnify.offers().then(
+  magnify.offer(caller, "sdp").then(
+    () => magnify.offers().then(
       offers => {
-        console.log(offers)
+        console.log(offers);
+        magnify.answer(caller, "sdp answer").then(
+          () => {
+            magnify.offers().then(console.log);
+            magnify.answers().then(console.log);
+          }
+        )
       }
     )
-  }
-)
+  )
+})
 
