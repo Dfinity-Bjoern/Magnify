@@ -5,5 +5,15 @@ import magnify from 'ic:canisters/magnify';
 // });
 
 magnify.ping().then(caller => {
-  document.body.innerHTML = `Hallo ${caller._idHex}`
-})
+  document.body.innerHTML = `Hallo ${caller._idHex}`;
+  magnify.offer(caller, "sdp")
+}).then(
+  () => {
+    magnify.offers().then(
+      offers => {
+        console.log(offers)
+      }
+    )
+  }
+)
+
