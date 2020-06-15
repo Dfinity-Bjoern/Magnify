@@ -33,9 +33,15 @@ let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
 
-const onAddStream = event => {
-  remoteVideo.srcObject = event.stream
-  remoteStream = event.stream
+const onTrack = event => {
+  console.log("addtrack")
+
+  if (!remoteStream) {
+    remoteStream = new MediaStream()
+  }
+
+  remoteVideo.srcObject = remoteStream
+  remoteStream.addTrack(event.track, remoteStream)
 }
 
 // Needed for cross-machine calls
@@ -43,48 +49,42 @@ const onIceCandidate = event => {
   console.log("onIceCandidate:", event)
 }
 
-const setLocalAndOffer = recipient => sessionDescription => {
-  rtcPeerConnection.setLocalDescription(sessionDescription)
-  magnify.offer(recipient, JSON.stringify(sessionDescription))
-}
-
-const setLocalAndAnswer = initiator => sessionDescription => {
-  rtcPeerConnection.setLocalDescription(sessionDescription)
-  magnify.answer(initiator, JSON.stringify(sessionDescription))
-}
-
 const sendOffer = recipient => {
   // TODO(Christoph): video to true
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     console.log("stream", stream)
     localStream = stream
     localVideo.srcObject = stream
 
     rtcPeerConnection = new RTCPeerConnection(iceServers)
     rtcPeerConnection.onicecandidate = onIceCandidate
-    rtcPeerConnection.onaddstream = onAddStream
+    rtcPeerConnection.ontrack = onTrack
 
-    // rtcPeerConnection.addStream(localStream)
     for (const track of localStream.getTracks()) {
       rtcPeerConnection.addTrack(track);
     }
-    rtcPeerConnection.createOffer(setLocalAndOffer(recipient), e => console.log(e))
+
+    rtcPeerConnection.createOffer().then(offer => {
+      return rtcPeerConnection.setLocalDescription(offer)
+    }).then(() => {
+      magnify.offer(recipient, JSON.stringify(rtcPeerConnection.localDescription))
+    })
+    .catch(e => console.log(e))
   })
   .catch(err => console.error(`Failed to connect 1: ${err}`))
 }
 
 const sendAnswer = () => {
   const offer = allOffers[0]
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     console.log("answer stream", stream)
     localStream = stream
     localVideo.srcObject = stream
 
     rtcPeerConnection = new RTCPeerConnection(iceServers)
     rtcPeerConnection.onicecandidate = onIceCandidate
-    rtcPeerConnection.onaddstream = onAddStream
+    rtcPeerConnection.ontrack = onTrack
 
-    //rtcPeerConnection.addStream(localStream)
     for (const track of localStream.getTracks()) {
       rtcPeerConnection.addTrack(track)
     }
@@ -92,7 +92,12 @@ const sendAnswer = () => {
     console.log("offer.offer", offer.offer)
     rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer.offer)))
 
-    rtcPeerConnection.createAnswer(setLocalAndAnswer(offer.initiator), e => console.log(e))
+    rtcPeerConnection.createAnswer().then(answer => {
+      return rtcPeerConnection.setLocalDescription(answer)
+    }).then(() => {
+      magnify.answer(offer.initiator, JSON.stringify(rtcPeerConnection.localDescription))
+    })
+    .catch(e => console.log(e))
   })
   .catch(err => console.error(`Failed to connect 2: ${err}`))
 }
