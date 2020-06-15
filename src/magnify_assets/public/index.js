@@ -8,9 +8,10 @@ const principalFromHex = hex => CanisterId.fromHex(hex)
 
 document.body.innerHTML = /*html*/`
   <div id="callerId"> Hello (Loading ...)</div>
-  <label for=recipientInput>Recipient:</label>
-  <input id="recipientInput">
-  <button id="recipientButton" type="button">Call</button>
+  <label for=partnerInput>Partner:</label>
+  <input id="partnerInput">
+  <button id="offerButton" type="button">Offer</button>
+  <button id="answerButton" type="button">Answer</button>
   <button id="listOffersButton" type="button">List offers</button>
   <button id="listAnswersButton" type="button">List answers</button>
   <h2>Offers:</h2>
@@ -20,11 +21,19 @@ document.body.innerHTML = /*html*/`
 `;
 
 const sendOffer = recipient => magnify.offer(recipient, "sdp")
+const sendAnswer = initiator => magnify.answer(initiator, "answerSDP")
 
-$("#recipientButton").addEventListener("click", ev => {
-  const callerId = $("#recipientInput").value;
+$("#offerButton").addEventListener("click", ev => {
+  const callerId = $("#partnerInput").value;
   sendOffer(principalFromHex(callerId)).then(() => {
     console.log(`Sent an offer to: ${callerId}`)
+  })
+})
+
+$("#answerButton").addEventListener("click", ev => {
+  const partnerId = $("#partnerInput").value;
+  sendAnswer(principalFromHex(partnerId)).then(() => {
+    console.log(`Sent an answer to: ${partnerId}`)
   })
 })
 
