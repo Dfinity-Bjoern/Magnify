@@ -64,7 +64,10 @@ const sendOffer = recipient => {
     rtcPeerConnection.onicecandidate = onIceCandidate
     rtcPeerConnection.onaddstream = onAddStream
 
-    rtcPeerConnection.addStream(localStream)
+    // rtcPeerConnection.addStream(localStream)
+    for (const track of localStream.getTracks()) {
+      rtcPeerConnection.addTrack(track);
+    }
     rtcPeerConnection.createOffer(setLocalAndOffer(recipient), e => console.log(e))
   })
   .catch(err => console.error(`Failed to connect 1: ${err}`))
@@ -81,7 +84,10 @@ const sendAnswer = () => {
     rtcPeerConnection.onicecandidate = onIceCandidate
     rtcPeerConnection.onaddstream = onAddStream
 
-    rtcPeerConnection.addStream(localStream)
+    //rtcPeerConnection.addStream(localStream)
+    for (const track of localStream.getTracks()) {
+      rtcPeerConnection.addTrack(track)
+    }
 
     console.log("offer.offer", offer.offer)
     rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer.offer)))
