@@ -32,6 +32,7 @@ let remoteStream
 let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
+let initiatorTimer
 
 const onTrack = event => {
   console.log("addtrack")
@@ -70,8 +71,21 @@ const sendOffer = recipient => {
       magnify.offer(recipient, JSON.stringify(rtcPeerConnection.localDescription))
     })
     .catch(e => console.log(e))
+
+    initiatorTimer = setInterval(pollAnswer, 1000)
   })
   .catch(err => console.error(`Failed to connect 1: ${err}`))
+}
+
+const pollAnswer = () => {
+  console.log("pollAnswer")
+  let answers = magnify.answers().then(answers => {
+    console.log(answers.length)
+    if (answers.length > 0) {
+      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answers[0].answer)))
+      clearInterval(initiatorTimer)
+    }
+  })
 }
 
 const sendAnswer = () => {
