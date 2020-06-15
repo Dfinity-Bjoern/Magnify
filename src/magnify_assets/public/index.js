@@ -40,9 +40,10 @@ const onIceCandidate = event => {
   console.log(`onIceCandidate: ${event}`)
 }
 
-const setLocalAndOffer = sessionDescription => {
+const setLocalAndOffer = recipient => sessionDescription => {
   rtcPeerConnection.setLocalDescription(sessionDescription)
-  magnify.offer(recipient, sessionDescription)
+  magnify.offer(recipient, JSON.stringify(sessionDescription))
+}
 }
 
 const sendOffer = recipient => {
