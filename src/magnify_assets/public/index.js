@@ -89,7 +89,7 @@ const sendOffer = recipient => {
       return rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.offer(activeRoom, recipient, alias, JSON.stringify({
+        magnify.offer(activeRoom, recipient, ["partner"], alias, JSON.stringify({
           ice: iceCandidates,
           description: rtcPeerConnection.localDescription
         }))
@@ -278,7 +278,7 @@ $("#refreshRoomList").addEventListener("click", () => {
 })
 
 $("#createRoomButton").addEventListener("click", () => {
-  magnify.createRoom().then(room => {
+  magnify.createRoom(alias).then(room => {
     allRooms.push(room)
     activeRoom = room
     displayVideos()

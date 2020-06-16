@@ -24,9 +24,14 @@ actor {
         answererAlias: Text;
     };
 
+    type Participant = {
+        principal : Principal;
+        alias : Text;
+    };
+
     type Room = {
         roomId : RoomId;
-        participants : List.List<Principal>;
+        participants : List.List<Participant>;
     };
 
     //2. OUR STATE
@@ -48,9 +53,12 @@ actor {
 
     //3. OUR APIS
 
-    public shared {caller} func createRoom() : async RoomId {
+    public shared {caller} func createRoom(creatorAlias : Text) : async RoomId {
         let room = freshRoomId();
-        rooms := List.push({ roomId = room; participants = List.singleton(caller)}, rooms);
+        rooms := List.push({ roomId = room; participants = List.singleton({
+            principal = caller;
+            alias = creatorAlias;
+        })}, rooms);
         room
     };
 
@@ -58,7 +66,7 @@ actor {
         List.toArray(List.map(rooms, func({ roomId }: Room): RoomId = roomId))
     };
 
-    public query func participants(room : RoomId) : async (?[Principal]) {
+    public query func participants(room : RoomId) : async (?[Participant]) {
         switch(findRoom(room)) {
             case null null;
             case (?r) ?(List.toArray(r.participants));
@@ -76,7 +84,7 @@ actor {
             case null false;
             case (?room) {
                 Option.isSome(
-                    List.find(room.participants, func (p : Principal): Bool = p == participant)
+                    List.find(room.participants, func (p : Participant): Bool = p.principal == participant)
                 )
             }
         }
@@ -101,7 +109,7 @@ actor {
     //1. Alice sends Offer to Bob
     //2. Bob answers Alice's offer
     //3. Alice and Bob are now connected
-    public shared {caller} func offer(room : RoomId, partner : Principal, initiatorName: Text, sdp : Text) : async (?Text) {
+    public shared {caller} func offer(room : RoomId, partner : Principal, partnerName : ?Text, initiatorName: Text, sdp : Text) : async (?Text) {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
         };
@@ -121,9 +129,16 @@ actor {
         };
 
         if (not isParticipantInRoom(partner, room)) {
+            let name = switch (partnerName) {
+                case null return ?"No alias for partner given";
+                case (?name) name;
+            };
             updateRoom(room, func(r : Room) : Room { 
                 { roomId = r.roomId; 
-                  participants = List.push(partner, r.participants);
+                    participants = List.push({
+                      principal = partner;
+                      alias = name;
+                    }, r.participants);
                 } 
             })
         };
