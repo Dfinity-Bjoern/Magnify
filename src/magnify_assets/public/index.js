@@ -45,7 +45,7 @@ document.body.innerHTML = /*html*/`
     <ul id="answers"></ul>
   <div>
   <div id="videos" hidden="true">
-    <video id="localVideo" autoplay></video>
+    <video id="localVideo" autoplay muted></video>
     <video id="remoteVideo" autoplay></video>
   </div>
 `;
@@ -100,7 +100,7 @@ const sendOffer = recipient => {
     // Poll the answers until our offer is accepted. This should have a timeout at
     // some point.
     initiatorTimer = setInterval(() => {
-      let answers = magnify.answers().then(answers => {
+      let answers = magnify.answers(activeRoom).then(answers => {
         console.log(`Found ${answers.length} answers on the canister`)
         if (answers.length > 0) {
           var details = JSON.parse(answers[0].answer)
@@ -150,7 +150,7 @@ const onTrack = event => {
 // Set up the local streaming and execute the completion
 const setupLocalAndComplete = (completion) => {
   // TODO(Christoph): video to true
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
 
@@ -231,7 +231,7 @@ $("#answerButton").addEventListener("click", ev => {
 //4.3 This button is clicked by any user to see all the offers available
 $("#listOffersButton").addEventListener("click", ev => {
   const ul = $("#offers");
-  magnify.offers().then(offers => {
+  magnify.offers(activeRoom).then(offers => {
     allOffers = offers
     ul.textContent = '';
 
@@ -260,7 +260,7 @@ $("#listOffersButton").addEventListener("click", ev => {
 //4.3 This button is clicked by any user to see all the answers available
 $("#listAnswersButton").addEventListener("click", ev => {
   const ul = $("#answers");
-  magnify.answers().then(answers => {
+  magnify.answers(activeRoom).then(answers => {
     ul.textContent = '';
     answers.forEach(answer => {
       const newLi = document.createElement("li")

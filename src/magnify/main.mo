@@ -22,7 +22,6 @@ actor {
         offer : Offer;
         answer : Text;
         answererAlias: Text;
-        roomId : RoomId;
     };
 
     type Room = {
@@ -140,10 +139,10 @@ actor {
     };
 
     //3.3 QUERY function to return the offers for the caller
-    public query {caller} func offers() : async [Offer] {
+    public query {caller} func offers(room : RoomId) : async [Offer] {
         return List.toArray(
             List.filter(openOffers, func (offer : Offer) : Bool {
-                offer.recipient == caller
+                offer.roomId == room and offer.recipient == caller
             })
         );
     };
@@ -168,7 +167,6 @@ actor {
             case (?myOffer) {
                 openOffers := Utils.listKeep(openOffers, matchOffer(room, partner, caller));
                 acceptances := List.push({
-                    roomId = room;
                     offer = myOffer;
                     answer = sdp;
                     answererAlias = answererAliasName;
@@ -179,10 +177,10 @@ actor {
     };
 
     //3.5 This QUERY function returns the answers for the caller
-    public query {caller} func answers() : async [Answer] {
+    public query {caller} func answers(room : RoomId) : async [Answer] {
         return List.toArray(
             List.filter(acceptances, func (answer : Answer) : Bool {
-                answer.offer.initiator == caller
+                answer.offer.roomId == room and answer.offer.initiator == caller
             })
         );
     };
