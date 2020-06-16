@@ -75,7 +75,11 @@ let myConnections = []
 // Variables related to WebRTC
 let localStream
 let localVideo
-let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
+let iceServers = { iceServers: [
+  { urls: "stun:stun.services.mozilla.com" },
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun.linphone.org" }
+] }
 var remotes = []
 
 // Timers for polling and ICE handling
