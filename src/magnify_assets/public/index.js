@@ -72,6 +72,7 @@ let allRooms = []
 let allParticipants = []
 let callerId =  'TBD';
 let activeRoom;
+let myConnections = []
 
 // Variables related to WebRTC
 let localStream
@@ -82,6 +83,7 @@ var remotes = []
 // Timers for polling and ICE handling
 let initiatorTimer
 let waitForIceDelay
+let pollForAdditionsTimer
 
 
 //3. FUNCTIONS
@@ -95,6 +97,9 @@ let waitForIceDelay
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
 const sendOffer = recipient => {
+  const recipientId = recipient._idHex
+  myConnections.push(recipientId)
+  console.log(`connecting to ${recipientId}`)
   setupPeerAndComplete(remote => {
     remote.rtcPeerConnection.createOffer().then(offer => {
       return remote.rtcPeerConnection.setLocalDescription(offer)
@@ -113,11 +118,13 @@ const sendOffer = recipient => {
     initiatorTimer = setInterval(() => {
       let answers = magnify.answers(activeRoom).then(answers => {
         console.log(`Found ${answers.length} answers on the canister`)
-        if (answers.length > 0) {
-          var details = JSON.parse(answers[0].answer)
-          remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-          addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
-          clearInterval(initiatorTimer)
+        for (const answer of answers) {
+          if (answer.offer.recipient._idHex == recipient._idHex) {
+            var details = JSON.parse(answer.answer)
+            remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description)).then(() => {console.log("promise here")})
+            addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
+            clearInterval(initiatorTimer)
+          }
         }
       })
     }, 1000)
@@ -131,6 +138,7 @@ const sendOffer = recipient => {
 const sendAnswer = (offerIndex) => {
   const offer = allOffers[offerIndex];
   console.log(`sending answer for offer ${offerIndex} of ${allOffers.length}`);
+  myConnections.push(offer.initiator._idHex)
 
   setupPeerAndComplete(remote => {
     var details = JSON.parse(offer.offer)
@@ -159,7 +167,40 @@ function setupRoomLocalAnd(completion) {
     localVideo.srcObject = stream
 
     completion()
+    pollForAdditionsTimer = setInterval(checkForAdditions, 5000)
   }).catch(err => console.error(`Failed to connect 1: ${err}`))
+}
+
+function checkForAdditions() {
+  // See whether there are outstanding offers
+  magnify.offers(activeRoom).then(offers => {
+    console.log(`Found ${offers.length} offers`)
+    allOffers = offers
+    offers.forEach((offer, index) => {
+      console.log("Sending an answer")
+      sendAnswer(index)
+    })
+  })
+
+  // See whether there are participants we're not connected with (and not callerId)
+  magnify.participants(activeRoom).then(participants => {
+    allParticipants = participants[0]
+    for (const participant of allParticipants) {
+      if (!isParticipantInConnections(participant.principal) && participant.principal._idHex != callerId) {
+        console.log(`Sending an offer to ${participant.principal._idHex}`)
+        sendOffer(participant.principal)
+      }
+    }
+  })
+}
+
+function isParticipantInConnections(participant) {
+  for (const connection of myConnections) {
+    if (connection == participant._idHex) {
+      return true
+    }
+  }
+  return false
 }
 
 // Set up the local streaming and execute the completion
@@ -172,7 +213,7 @@ const setupPeerAndComplete = (completion) => {
   }
 
   // Add video element
-  remote.video.id = "remoteVideo-x"
+  // remote.video.id = "remoteVideo-x"
   remote.video.autoplay = true
   $("#videos").appendChild(remote.video)
 
@@ -235,18 +276,18 @@ function getAliasForParticipant(principal) {
 //4.1 This button is clicked by the caller to send an offer to a recipient
 $("#offerButton").addEventListener("click", ev => {
   const callerId = $("#partnerInput").value;
-  setupRoomLocalAnd(() => {
+  // setupRoomLocalAnd(() => {
     sendOffer(principalFromHex(callerId))
-  })
+  // })
 })
 
 //4.2 This button is clicked by a recipient to answer an offer and join a WebRTC call
 $("#answerButton").addEventListener("click", ev => {
   // TODO Actually select the offer you want to answer
   let offerIndex = 0;
-  setupRoomLocalAnd(() => {
+  // setupRoomLocalAnd(() => {
     sendAnswer(offerIndex);
-  })
+  // })
 });
 
 //4.3 This button is clicked by any user to see all the offers available
@@ -306,6 +347,12 @@ $("#createRoomButton").addEventListener("click", () => {
     allRooms.push(room)
     activeRoom = room
     displayVideos()
+    setupRoomLocalAnd(() => {
+      magnify.participants(room).then(participants => {
+        allParticipants = participants[0]
+        console.log(participants[0])
+      })
+    })
   })
 })
 
