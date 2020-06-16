@@ -308,7 +308,7 @@ function setupWelcomePage() {
   const newRoomUser = $("#newRoomUser")
 
   roomPollingInterval = setInterval(() => {
-    magnify.listAllRooms().then(rooms => {
+    magnify.listRooms().then(rooms => {
       allRooms = rooms;
       refreshRooms()
     })

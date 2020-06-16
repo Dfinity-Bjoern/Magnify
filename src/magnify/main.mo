@@ -70,6 +70,15 @@ actor {
         List.toArray(List.map(rooms, func({ roomId }: Room): RoomId = roomId))
     };
 
+    public query {caller} func listRooms() : async [RoomId] {
+        List.toArray(
+            List.map(
+                List.filter(rooms, func (r : Room) : Bool { isParticipantInRoom(caller, r.roomId) }),
+                func({ roomId }: Room): RoomId = roomId
+            )
+        )
+    };
+
     //3.3 QUERY function that returns the list of participants of a given room.
     // Returns null if the room does not exist.
     public query func participants(room : RoomId) : async (?[Participant]) {
