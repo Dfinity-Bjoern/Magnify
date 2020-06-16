@@ -13,7 +13,7 @@ body {
   background-color: #f8fbfe;
 }
 
-main {
+main.welcomePage {
   margin: 4vh auto;
   padding: 1vh 100px;
   max-width: 700px;
@@ -21,6 +21,80 @@ main {
   font-weight: 400;
   background-color: white;
   height: 90vh;
+}
+
+main.videoPage {
+  font-family: "Comic Neue";
+  font-weight: 400;
+  background-color: white;
+  margin: 4vh auto;
+  max-width: 90vw;
+}
+
+.heading {
+  text-align: center;
+  font-family: "Parisienne", cursive;
+  font-size: 120px;
+  font-weight: 400;
+  margin: 0;
+}
+
+#roomList {
+  display: inline-block;
+  border: 0.1rem solid #d1d1d1;
+  border-radius: 0.4rem;
+  width: 100%;
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 20px 0;
+}
+
+.room-item {
+  padding: 10px 20px;
+  font-size: 1.3rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.room-item:first-child {
+  border-radius: 0.4rem 0;
+}
+.room-item:last-child {
+  border-bottom: none;
+  border-radius: 0 0.4rem;
+}
+
+.room-item:hover {
+  background-color: #443a54;
+  color: #fff;
+}
+
+.room-item__disabled {
+    padding: 10px 20px;
+    font-size: 1.3rem;
+    font-weight: 400;
+}
+
+.new-room-controls {
+  display: flex;
+}
+
+#newRoomName {
+  margin-right: 15px;
+}
+
+#newRoomUser {
+  margin-right: 15px;
+}
+
+#principalDisplay {
+  font-size: 1.2rem;
+}
+
+#inviteControls {
+    display: flex;
+    max-width: 600px;
+    margin: 0 auto;
 }
 
 input {
@@ -61,17 +135,17 @@ button:disabled:hover {
 .flex-container {
   display: flex;
   flex-wrap: wrap;
-  background-color: DodgerBlue;
-  }
+  justify-content: center;
+}
 
-  .flex-container > div {
+.flex-container > div {
   background-color: #f1f1f1;
   width: 100px;
   margin: 10px;
   text-align: center;
   line-height: 75px;
   font-size: 30px;
-  }
+}
 
   .flex-container > video {
   background-color: #f1f1f1;

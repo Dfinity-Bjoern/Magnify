@@ -23,71 +23,39 @@ const principalFromHex = hex => CanisterId.fromHex(hex)
 // This means our two options are either: 
 //  a. create an in-line string like below
 //  b. use some framework like React.js where we can have embedded HTML within JS
-// We opted for inline string for simplicity for the sake of Hackathon. 
+// We opted for inline string for simplicity for the sake of Hackathon.
 
-document.body.innerHTML = /*html*/`
-<main>
-  <div id="info">
-    <div id="userInfo">
-      <div id="callerId">Hello!!</div>
-    </div>
+const welcomePage = /*html*/`
+<main role="main" class="welcomePage">
+  <h1 class="heading">Magnify</h1>
+  <h2>Join a room&hellip;</h2>
+  <ul id="roomList">
+    <li class="room-item__disabled">Loading&hellip;</li>
+  </ul>
+  <h2>&hellip; or create a new one</h2>
+  <div class="new-room-controls">
+    <input id="newRoomName" placeholder="New Room" />
+    <input id="newRoomUser" placeholder="Your name"/>
+    <button id="createNewRoom">Create</button>
   </div>
-  <br>
+  <h2>&hellip; or let someone invite you with</h2>
+  <p id="principalDisplay">Loading...</p>
+</main>
+`;
 
-  <div id="roomControls">
-    <label id="aliasInputLabel" for=aliasInput>Input your Alias:</label>
-    <input id="aliasInput">
-    <button id="createRoomButton">Create Room</button>
-    <button id="refreshRoomList">Refresh Rooms</button>
-    <ul id="roomList"></ul>
-  </div>
-  <div id="controls" hidden="true">
-    <label for=partnerInput>Partner:</label>
-    <input id="partnerInput">
-    <label if="partnerAliasLabel" for=partnerAlias>Alias:</label>
-    <input id="partnerAlias">
-    <button id="offerButton" type="button">Offer</button>
-    <button id="answerButton" type="button">Answer</button>
-    <button id="listOffersButton" type="button">List offers</button>
-    <button id="listAnswersButton" type="button">List answers</button>
-    <h2>Offers:</h2>
-    <ul id="offers"></ul>
-    <h2>Answers:</h2>
-    <ul id="answers"></ul>
-  </div>
-  <div id="videos" hidden="true">
-    <video id="localVideo" autoplay muted></video>
+const videoPage = /*html*/`
+<main role="main" class="videoPage">
+  <h1 class="heading">Magnify</h1>
+  <div id="videos" class="flex-container">
+    <video id="localVideo" autoplay muted controls></video>
   </div>
 
-  <h1>PLACEHOLDER: The flex-wrap tests with hard-coded videos and boxes</h1>
-
-  <div class="flex-container">
-        <video id="1" controls></video>
-        <video id="2" controls></video>
-        <video id="3" controls></video>
-        <video id="4" controls></video>
-        <video id="5" controls></video>
+  <div id="inviteControls">
+    <input id="inviteName" placeholder="Invitee name" />
+    <input id="invitePrincipal" placeholder="Invitee Principal"/>
+    <button id="invite">Invite</button>
   </div>
-
-  <div class="flex-container">
-        <div></div>
-        <div>2</div>
-        <div>3</div>  
-        <div>4</div>
-        <div>5</div>
-        <div>6</div>  
-        <div>7</div>
-        <div>8</div>
-        <div>9</div>  
-        <div>10</div>
-        <div>11</div>
-        <div>12</div>  
-    </div>
-  
-
-  
-
-  </main>
+</main>
 `;
 
 
@@ -100,12 +68,12 @@ document.body.innerHTML = /*html*/`
 let allOffers = []
 let allRooms = []
 let allParticipants = []
-let callerId =  'TBD';
+let callerId = 'TBD';
 let activeRoom;
 
 // Variables related to WebRTC
 let localStream
-let localVideo = $("#localVideo")
+let localVideo
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
 var remotes = []
 
@@ -124,13 +92,14 @@ let waitForIceDelay
 //1. Alice sends Offer to Bob
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
-const sendOffer = recipient => {
+const sendOffer = (recipient, alias) => {
+  console.log("sendOffer", recipient, alias, )
   setupPeerAndComplete(remote => {
     remote.rtcPeerConnection.createOffer().then(offer => {
       return remote.rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.offer(activeRoom, recipient, [$("#partnerAlias").value], JSON.stringify({
+        magnify.offer(activeRoom, recipient, [alias], JSON.stringify({
           ice: remote.iceCandidates,
           description: remote.rtcPeerConnection.localDescription
         }))
@@ -184,7 +153,7 @@ const sendAnswer = (offerIndex) => {
 // Set up a room and continue
 function setupRoomLocalAnd(completion) {
   // TODO(Christoph): video to true
-  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
 
@@ -204,6 +173,7 @@ const setupPeerAndComplete = (completion) => {
   // Add video element
   remote.video.id = "remoteVideo-x"
   remote.video.autoplay = true
+  remote.video.controls = true
   $("#videos").appendChild(remote.video)
 
   // Set ICE handler for that remote. Needed for cross-machine calls
@@ -263,119 +233,102 @@ function getAliasForParticipant(principal) {
 //4. UI AND EVENT HANDLERS
 
 //4.1 This button is clicked by the caller to send an offer to a recipient
-$("#offerButton").addEventListener("click", ev => {
-  const callerId = $("#partnerInput").value;
-  setupRoomLocalAnd(() => {
-    sendOffer(principalFromHex(callerId))
-  })
-})
+// $("#offerButton").addEventListener("click", ev => {
+//   const callerId = $("#partnerInput").value;
+//   setupRoomLocalAnd(() => {
+//     sendOffer(principalFromHex(callerId))
+//   })
+// })
 
 //4.2 This button is clicked by a recipient to answer an offer and join a WebRTC call
-$("#answerButton").addEventListener("click", ev => {
-  // TODO Actually select the offer you want to answer
-  let offerIndex = 0;
-  setupRoomLocalAnd(() => {
-    sendAnswer(offerIndex);
-  })
-});
+// $("#answerButton").addEventListener("click", ev => {
+//   // TODO Actually select the offer you want to answer
+//   let offerIndex = 0;
+//   setupRoomLocalAnd(() => {
+//     sendAnswer(offerIndex);
+//   })
+// });
 
 //4.3 This button is clicked by any user to see all the offers available
-$("#listOffersButton").addEventListener("click", ev => {
-  const ul = $("#offers");
-  magnify.offers(activeRoom).then(offers => {
-    allOffers = offers
-    ul.textContent = '';
+// $("#listOffersButton").addEventListener("click", ev => {
+//   const ul = $("#offers");
+//   magnify.offers(activeRoom).then(offers => {
+//     allOffers = offers
+//     ul.textContent = '';
 
-    offers.forEach((offer, index) => {
-      console.log(`offer has index: ${index}`);
-      console.log(offer);
-      const newLi = document.createElement("li");
-      newLi.textContent = `${getAliasForParticipant(offer.initiator)} => you    `;
-      ul.appendChild(newLi);
+//     offers.forEach((offer, index) => {
+//       console.log(`offer has index: ${index}`);
+//       console.log(offer);
+//       const newLi = document.createElement("li");
+//       newLi.textContent = `${getAliasForParticipant(offer.initiator)} => you    `;
+//       ul.appendChild(newLi);
 
-      //add button so the user can answer the offer
-      const newAnswerButton = document.createElement("button");
-      newAnswerButton.id = `answerButton-${index}`;
-      newAnswerButton.innerText = `Answer offer #${index} from ${getAliasForParticipant(offer.initiator)}`;
-      newLi.appendChild(newAnswerButton);
-      //we use const in order to avoid closure/scope unpredictability
-      //we the closure scope in the addEventListener
-      const offerIndex = index; 
-      $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
-        sendAnswer(offerIndex);
-      });
-    })
-  })
-})
+//       //add button so the user can answer the offer
+//       const newAnswerButton = document.createElement("button");
+//       newAnswerButton.id = `answerButton-${index}`;
+//       newAnswerButton.innerText = `Answer offer #${index} from ${getAliasForParticipant(offer.initiator)}`;
+//       newLi.appendChild(newAnswerButton);
+//       //we use const in order to avoid closure/scope unpredictability
+//       //we the closure scope in the addEventListener
+//       const offerIndex = index; 
+//       $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
+//         sendAnswer(offerIndex);
+//       });
+//     })
+//   })
+// })
 
 //4.4 This button is clicked by any user to see all the answers available
-$("#listAnswersButton").addEventListener("click", ev => {
-  const ul = $("#answers");
-  magnify.answers(activeRoom).then(answers => {
-    ul.textContent = '';
-    answers.forEach(answer => {
-      const newLi = document.createElement("li")
-      newLi.textContent = `${answer.offer.initiator._idHex} => ${answer.offer.recipient._idHex}`;
-      ul.appendChild(newLi);
-    })
-  })
-})
+// $("#listAnswersButton").addEventListener("click", ev => {
+//   const ul = $("#answers");
+//   magnify.answers(activeRoom).then(answers => {
+//     ul.textContent = '';
+//     answers.forEach(answer => {
+//       const newLi = document.createElement("li")
+//       newLi.textContent = `${answer.offer.initiator._idHex} => ${answer.offer.recipient._idHex}`;
+//       ul.appendChild(newLi);
+//     })
+//   })
+// })
 
 //4.5 This button is clicked to refresh the list of available rooms
-$("#refreshRoomList").addEventListener("click", () => {
-  magnify.listAllRooms().then(rooms => {
-    allRooms = rooms
-    refreshRooms()
-  })
-})
+// $("#refreshRoomList").addEventListener("click", () => {
+//   magnify.listAllRooms().then(rooms => {
+//     allRooms = rooms
+//     refreshRooms()
+//   })
+// })
 
 //4.6 This button is clicked to create a new room
-$("#createRoomButton").addEventListener("click", () => {
-  let alias = $("#aliasInput").value;
-  magnify.createRoom(alias).then(room => {
-    allRooms.push(room)
-    activeRoom = room
-    displayVideos()
-  })
-})
-
-// Helper function that hides the room controls and shows the video controls
-function displayVideos() {
-  $("#controls").hidden = false
-  $("#videos").hidden = false
-  $("#roomControls").hidden = true
-}
+// $("#createRoomButton").addEventListener("click", () => {
+//   let alias = $("#aliasInput").value;
+//   magnify.createRoom(alias).then(room => {
+//     allRooms.push(room)
+//     activeRoom = room
+//     displayVideos()
+//   })
+// })
 
 // Helper function that loads the room list from the canister and creates join-buttons in the HTML
 function refreshRooms() {
   const ul = $("#roomList");
+  if (!ul) return
   ul.textContent = '';
+  if (allRooms.length === 0) {
+    const newLi = document.createElement("li")
+    newLi.className = "room-item__disabled"
+    newLi.disabled = true
+    newLi.textContent = "No rooms available";
+    ul.appendChild(newLi);
+  }
   allRooms.forEach(room => {
     const newLi = document.createElement("li")
+    newLi.className = "room-item"
     newLi.textContent = room;
-
-    //add button so the user can answer the offer
-    const useRoomButton = document.createElement("button");
-    useRoomButton.innerText = "Join";
-    newLi.appendChild(useRoomButton);
-    useRoomButton.addEventListener("click", ev => {
-      activeRoom = room
-      displayVideos()
-      magnify.participants(room).then(participants => {
-        allParticipants = participants[0]
-        console.log(participants[0])
+    newLi.addEventListener("click", () => {
+        activeRoom = room
+        setupVideoPage()
       })
-      // Auto-join if there are available offers
-      setupRoomLocalAnd(() => {
-        magnify.offers(room).then(offers => {
-          console.log(`Found ${offers.length} offers`)
-          allOffers = offers
-          offers.forEach((offer, index) => {
-            sendAnswer(index)
-          })
-        })
-      })
-    });
     ul.appendChild(newLi);
   })
 }
@@ -384,16 +337,79 @@ function refreshRooms() {
 
 //5.1 This part is executed when the JS loads, the front-end asks the canister for a principal ID
 // it can use in future calls as an identifier. It also loads the initial room list.
+let roomPollingInterval;
+function setupWelcomePage() {
+  document.body.innerHTML = welcomePage
+  const createButton = $("#createNewRoom")
+  const newRoomName = $("#newRoomName")
+  const newRoomUser = $("#newRoomUser")
+
+  roomPollingInterval = setInterval(() => {
+    magnify.listAllRooms().then(rooms => {
+      allRooms = rooms;
+      refreshRooms()
+    })
+  }, 2000);
+
+  createButton.addEventListener("click", ev => {
+    if (createButton.disabled) {
+      ev.stopPropagation()
+      ev.preventDefault()
+    } else {
+      // TODO use the room name
+      let alias = newRoomUser.value;
+      magnify.createRoom(alias).then(room => {
+        allRooms.push(room)
+        activeRoom = room
+        setupVideoPage()
+      })
+    }
+  })
+}
+
+function tearDownWelcomePage() {
+  clearInterval(roomPollingInterval)
+}
+
+function setupVideoPage() {
+  tearDownWelcomePage()
+  document.body.innerHTML = videoPage
+  localVideo = $("#localVideo")
+  const inviteName = $("#inviteName")
+  const invitePrincipal = $("#invitePrincipal")
+  const inviteButton = $("#invite")
+
+  setupRoomLocalAnd(() => {
+    magnify.offers(activeRoom).then(offers => {
+      console.log(`Found ${offers.length} offers`)
+      allOffers = offers
+      offers.forEach((offer, index) => {
+        sendAnswer(index)
+      })
+    })
+    magnify.participants(activeRoom).then(participants => {
+      allParticipants = participants[0]
+      console.log(participants[0])
+    })
+  })
+
+  inviteButton.addEventListener("click", ev => {
+    sendOffer(principalFromHex(invitePrincipal.value), inviteName.value)
+  })
+}
 
 let callerP = magnify.ping()
 let roomsP = magnify.listAllRooms()
+
+console.log("Hello friend")
+setupWelcomePage()
 callerP.then(caller => 
   roomsP.then(rooms => {
       // $("#callerId").innerText = `Hello ${caller._idHex}`;
       console.log(`fetched the caller ID: ${caller._idHex}`);
       //add it to the local variables (for easier retrieval in the front-end)
       callerId = caller._idHex;
-      $("#callerId").innerText = `Welcome, ${callerId}!`;
+      $("#principalDisplay").innerText = callerId;
       allRooms = rooms;
       refreshRooms()
 }))
