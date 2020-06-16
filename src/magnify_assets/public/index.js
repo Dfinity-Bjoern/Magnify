@@ -1,9 +1,18 @@
 import magnify from 'ic:canisters/magnify';
+import "./styles.css"
 import { CanisterId } from '@dfinity/agent';
 
-//0. PREP WORK A& WORK AROUNDS
+
+//0. PREP WORK & WORK AROUNDS
 // This is ergonomic short-hand so we do not need to have to keep writing "document.."
 const $ = document.querySelector.bind(document);
+
+// Adds fonts
+const link = document.createElement('link');
+link.setAttribute('rel', 'stylesheet');
+link.setAttribute('type', 'text/css');
+link.setAttribute('href', 'https://fonts.googleapis.com/css2?family=Comic+Neue&family=Parisienne&display=swap');
+document.head.appendChild(link);
 
 // Sadness :(
 // We have to do this as a work-around because there is a bug in Candid currently
@@ -17,6 +26,7 @@ const principalFromHex = hex => CanisterId.fromHex(hex)
 // We opted for inline string for simplicity for the sake of Hackathon. 
 
 document.body.innerHTML = /*html*/`
+<main>
   <div id="info">
     <div id="userInfo">
       <div id="callerId">Hello!!</div>
@@ -47,6 +57,7 @@ document.body.innerHTML = /*html*/`
   <div id="videos" hidden="true">
     <video id="localVideo" autoplay muted></video>
   </div>
+  </main>
 `;
 
 
