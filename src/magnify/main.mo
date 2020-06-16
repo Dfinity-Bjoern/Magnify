@@ -121,6 +121,16 @@ actor {
             return ?"Already existing offer"
         };
         
+        if (Option.isSome(List.find(acceptances, func (a : Answer) : Bool { 
+            a.offer.roomId == room and 
+            (
+              (a.offer.initiator == caller and a.offer.recipient == partner) or 
+              (a.offer.initiator == partner and a.offer.recipient == caller)
+            )
+        }))) {
+            return ?"Already existing accepted offer"
+        };
+
         if (not isParticipantInRoom(caller, room)) {
             return ?"Caller not in room"
         };
