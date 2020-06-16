@@ -46,7 +46,6 @@ document.body.innerHTML = /*html*/`
   <div>
   <div id="videos" hidden="true">
     <video id="localVideo" autoplay muted></video>
-    <video id="remoteVideo" autoplay></video>
   </div>
 `;
 
@@ -66,11 +65,8 @@ let activeRoom;
 // Variables related to WebRTC
 let localStream
 let localVideo = $("#localVideo")
-let remoteStream = new MediaStream()
-let remoteVideo = $("#remoteVideo")
-let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
-let iceCandidates = []
+var remotes = []
 
 // Timers for polling and ICE handling
 let initiatorTimer
@@ -88,14 +84,14 @@ let waitForIceDelay
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
 const sendOffer = recipient => {
-  setupLocalAndComplete(() => {
-    rtcPeerConnection.createOffer().then(offer => {
-      return rtcPeerConnection.setLocalDescription(offer)
+  setupPeerAndComplete(remote => {
+    remote.rtcPeerConnection.createOffer().then(offer => {
+      return remote.rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
         magnify.offer(activeRoom, recipient, [$("#partnerAlias").value], JSON.stringify({
-          ice: iceCandidates,
-          description: rtcPeerConnection.localDescription
+          ice: remote.iceCandidates,
+          description: remote.rtcPeerConnection.localDescription
         }))
       }, 2000)
     })
@@ -108,8 +104,8 @@ const sendOffer = recipient => {
         console.log(`Found ${answers.length} answers on the canister`)
         if (answers.length > 0) {
           var details = JSON.parse(answers[0].answer)
-          rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-          addRemoteIceCandidates(details.ice)
+          remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+          addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
           clearInterval(initiatorTimer)
         }
       })
@@ -125,18 +121,18 @@ const sendAnswer = (offerIndex) => {
   const offer = allOffers[offerIndex];
   console.log(`sending answer for offer ${offerIndex} of ${allOffers.length}`);
 
-  setupLocalAndComplete(() => {
+  setupPeerAndComplete(remote => {
     var details = JSON.parse(offer.offer)
-    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-    addRemoteIceCandidates(details.ice)
+    remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+    addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
 
-    rtcPeerConnection.createAnswer().then(answer => {
-      return rtcPeerConnection.setLocalDescription(answer)
+    remote.rtcPeerConnection.createAnswer().then(answer => {
+      return remote.rtcPeerConnection.setLocalDescription(answer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
         magnify.answer(activeRoom, offer.initiator, JSON.stringify({
-          description: rtcPeerConnection.localDescription,
-          ice: iceCandidates
+          description: remote.rtcPeerConnection.localDescription,
+          ice: remote.iceCandidates
         }))
       }, 2000)
     })
@@ -144,51 +140,66 @@ const sendAnswer = (offerIndex) => {
   })
 }
 
-// Receiving a track (i.e. audio or video data stream) from the remote
-// partner, add it to the video display.
-const onTrack = event => {
-  remoteVideo.srcObject = remoteStream
-  remoteStream.addTrack(event.track, remoteStream)
-}
-
-// Set up the local streaming and execute the completion
-const setupLocalAndComplete = (completion) => {
+// Set up a room and continue
+function setupRoomLocalAnd(completion) {
   // TODO(Christoph): video to true
   navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
 
-    rtcPeerConnection = new RTCPeerConnection(iceServers)
-    rtcPeerConnection.onicecandidate = onIceCandidate
-    rtcPeerConnection.ontrack = onTrack
-
-    for (const track of localStream.getTracks()) {
-      rtcPeerConnection.addTrack(track);
-    }
-
     completion()
   }).catch(err => console.error(`Failed to connect 1: ${err}`))
 }
 
-// 3.5 onIceCandidate() is Needed for cross-machine calls
-// "ICE" is a concept for the WebRTC protocol. 
-// ICE utilizes different technologies and protocols to overcome the challenges posed 
-// by different types of NAT mappings
-// It can be simplified with this example: 
-// a user is behind a firewall with many machines, but wants to establish a P2P connection 
-//ICE is critical for WebRTC: https://temasys.io/webrtc-ice-sorcery/
-const onIceCandidate = event => {
-  console.log("onIceCandidate:", event)
-  if (event.candidate) {
-    iceCandidates.push({
-      label: event.candidate.sdpMLineIndex,
-      candidate: event.candidate.candidate
-    })
+// Set up the local streaming and execute the completion
+const setupPeerAndComplete = (completion) => {
+  var remote = {
+    rtcPeerConnection: new RTCPeerConnection(iceServers),
+    iceCandidates: [],
+    video: document.createElement("video"),
+    stream: new MediaStream()
   }
+
+  // Add video element
+  remote.video.id = "remoteVideo-x"
+  remote.video.autoplay = true
+  $("#videos").appendChild(remote.video)
+
+  // Set ICE handler for that remote. Needed for cross-machine calls
+  // "ICE" is a concept for the WebRTC protocol. 
+  // ICE utilizes different technologies and protocols to overcome the challenges posed 
+  // by different types of NAT mappings
+  // It can be simplified with this example: 
+  // a user is behind a firewall with many machines, but wants to establish a P2P connection 
+  //ICE is critical for WebRTC: https://temasys.io/webrtc-ice-sorcery/
+  remote.rtcPeerConnection.onicecandidate = event => {
+    console.log("onIceCandidate:", event)
+    if (event.candidate) {
+      remote.iceCandidates.push({
+        label: event.candidate.sdpMLineIndex,
+        candidate: event.candidate.candidate
+      })
+    }
+  }
+
+  // Set track handler for that remote. Receiving a track (i.e. audio or video data stream)
+  // from the remote partner, add it to the video display.
+  remote.rtcPeerConnection.ontrack = event => {
+    remote.video.srcObject = remote.stream
+    remote.stream.addTrack(event.track, remote.stream)
+  }
+
+  // Add local tracks to the remote connection
+  for (const track of localStream.getTracks()) {
+    remote.rtcPeerConnection.addTrack(track);
+  }
+
+  remotes.push(remote)
+  completion(remote)
 }
 
 // Add ICE candidates received from the partner to local WebRTC object
-const addRemoteIceCandidates = candidates => {
+const addRemoteIceCandidates = (candidates, rtcPeerConnection) => {
   for (const c of candidates) {
     const candidate = new RTCIceCandidate({
       sdpMLineIndex: c.label,
@@ -213,14 +224,18 @@ function getAliasForParticipant(principal) {
 //4.1 This button is clicked by the caller to send an offer to a recipient
 $("#offerButton").addEventListener("click", ev => {
   const callerId = $("#partnerInput").value;
-  sendOffer(principalFromHex(callerId))
+  setupRoomLocalAnd(() => {
+    sendOffer(principalFromHex(callerId))
+  })
 })
 
 //4.2 This button is clicked by a recipient to answer an offer and join a WebRTC call
 $("#answerButton").addEventListener("click", ev => {
   // TODO Actually select the offer you want to answer
   let offerIndex = 0;
-  sendAnswer(offerIndex);
+  setupRoomLocalAnd(() => {
+    sendAnswer(offerIndex);
+  })
 });
 
 //4.3 This button is clicked by any user to see all the offers available
@@ -310,11 +325,13 @@ function refreshRooms() {
         console.log(participants[0])
       })
       // Auto-join if there are available offers
-      magnify.offers(room).then(offers => {
-        console.log(`Found ${offers.length} offers`)
-        allOffers = offers
-        offers.forEach((offer, index) => {
-          sendAnswer(index)
+      setupRoomLocalAnd(() => {
+        magnify.offers(room).then(offers => {
+          console.log(`Found ${offers.length} offers`)
+          allOffers = offers
+          offers.forEach((offer, index) => {
+            sendAnswer(index)
+          })
         })
       })
     });
