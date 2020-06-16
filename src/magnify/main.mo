@@ -7,6 +7,7 @@ actor {
         initiator : Principal;
         recipient : Principal;
         offer : Text;
+        initiatorAlias: Text;
     };
 
     type Answer = {
@@ -21,11 +22,12 @@ actor {
         return caller
     };
 
-    public shared {caller} func offer(partner : Principal, sdp : Text) : async () {
+    public shared {caller} func offer(partner : Principal, initiatorName: Text, sdp : Text) : async () {
         openOffers := List.push({
             initiator = caller;
             recipient = partner;
             offer = sdp;
+            initiatorAlias = initiatorName;
         }, openOffers);
     };
 
