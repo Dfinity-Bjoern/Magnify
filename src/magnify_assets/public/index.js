@@ -90,7 +90,19 @@ const sendOffer = recipient => {
     })
     .catch(e => console.log(e))
 
-    initiatorTimer = setInterval(pollAnswer, 1000)
+    // Poll the answers until our offer is accepted. This should have a timeout at
+    // some point.
+    initiatorTimer = setInterval(() => {
+      let answers = magnify.answers().then(answers => {
+        console.log(`Found ${answers.length} answers on the canister`)
+        if (answers.length > 0) {
+          var details = JSON.parse(answers[0].answer)
+          rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+          addRemoteIceCandidates(details.ice)
+          clearInterval(initiatorTimer)
+        }
+      })
+    }, 1000)
   })
 }
 
@@ -118,19 +130,6 @@ const sendAnswer = (offerIndex) => {
       }, 2000)
     })
     .catch(e => console.log(e))
-  })
-}
-
-const pollAnswer = () => {
-  console.log("pollAnswer")
-  let answers = magnify.answers().then(answers => {
-    console.log(answers.length)
-    if (answers.length > 0) {
-      var details = JSON.parse(answers[0].answer)
-      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-      addRemoteIceCandidates(details.ice)
-      clearInterval(initiatorTimer)
-    }
   })
 }
 
