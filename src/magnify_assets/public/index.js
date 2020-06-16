@@ -309,6 +309,14 @@ function refreshRooms() {
         allParticipants = participants[0]
         console.log(participants[0])
       })
+      // Auto-join if there are available offers
+      magnify.offers(room).then(offers => {
+        console.log(`Found ${offers.length} offers`)
+        allOffers = offers
+        offers.forEach((offer, index) => {
+          sendAnswer(index)
+        })
+      })
     });
     ul.appendChild(newLi);
   })
