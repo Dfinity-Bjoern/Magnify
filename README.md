@@ -1,19 +1,43 @@
 # magnify
 
-Welcome to your new magnify project and to the internet computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
+Magnify is an open video conference app hosted by an Internet Computer canister. 
 
-To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
+## How to run
 
-To learn more before you start working with magnify, see the following documentation available online:
+### In Terminal window 1
+```bash
+cd magnify/
 
-- [Quick Start](https://sdk.dfinity.org/developers-guide/quickstart.html)
-- [Developer's Guide](https://sdk.dfinity.org/developers-guide)
-- [Language Reference](https://sdk.dfinity.org/language-guide)
+npm install
 
-If you want to start working on your project right away, you might want to try the following commands:
+dfx start
+
+
+```
+
+### In Terminal window 2
 
 ```bash
 cd magnify/
-dfx help
-dfx config --help
+
+npm install
+
+dfx build && dfx canister install --all --mode=reinstall
+
 ```
+
+
+## Basic Code Structure
+
+There are really only two files that an application developer would touch:
+
+1. Backend: The backend logic is in the Motoko-language file of the Canister `src/magnify/main.mo`
+2. Frontend: The frontend (UX) is in the JavaScript file `src/manify_assets/public/index.js`
+
+## Background info
+
+Magnify is based on two key technologies:
+
+- [WebRTC](https://webrtc.org/)
+- [DFINITY Internet Computer](https://sdk.dfinity.org/developers-guide/quickstart.html)
+
