@@ -53,24 +53,28 @@ document.body.innerHTML = /*html*/`
 
 //2. VARIABLES
 // Variables Data stored in the local instantiation of the front-end
-// The purpose of this is to be able to retrieve variables like "callerId" or "alias"
+// The purpose of this is to be able to retrieve variables like "callerId"
 // across multiple JS functions... without having to re-read the HTML.
 
+// Variables related to application logic. Store results from querying the canister.
 let allOffers = []
 let allRooms = []
 let allParticipants = []
+let callerId =  'TBD';
+let activeRoom;
 
+// Variables related to WebRTC
 let localStream
 let localVideo = $("#localVideo")
 let remoteStream = new MediaStream()
 let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
+let iceCandidates = []
+
+// Timers for polling and ICE handling
 let initiatorTimer
 let waitForIceDelay
-let iceCandidates = []
-let callerId =  'TBD';
-let activeRoom;
 
 
 //3. FUNCTIONS
@@ -194,6 +198,7 @@ const addRemoteIceCandidates = candidates => {
   }
 }
 
+// Helper function: search the alias of a participant in the list returned by the canister.
 function getAliasForParticipant(principal) {
   console.log(principal)
   for (const participant of allParticipants) {
@@ -247,7 +252,7 @@ $("#listOffersButton").addEventListener("click", ev => {
   })
 })
 
-//4.3 This button is clicked by any user to see all the answers available
+//4.4 This button is clicked by any user to see all the answers available
 $("#listAnswersButton").addEventListener("click", ev => {
   const ul = $("#answers");
   magnify.answers(activeRoom).then(answers => {
@@ -260,6 +265,7 @@ $("#listAnswersButton").addEventListener("click", ev => {
   })
 })
 
+//4.5 This button is clicked to refresh the list of available rooms
 $("#refreshRoomList").addEventListener("click", () => {
   magnify.listAllRooms().then(rooms => {
     allRooms = rooms
@@ -267,6 +273,7 @@ $("#refreshRoomList").addEventListener("click", () => {
   })
 })
 
+//4.6 This button is clicked to create a new room
 $("#createRoomButton").addEventListener("click", () => {
   let alias = $("#aliasInput").value;
   magnify.createRoom(alias).then(room => {
@@ -276,18 +283,14 @@ $("#createRoomButton").addEventListener("click", () => {
   })
 })
 
-
-//5. THING TO CALL AT ONLOAD
-
-//5.1 This function is called when the JS loads, the front-end asks the canister for a principal ID
-// it can use in future calls as an identifier
-
+// Helper function that hides the room controls and shows the video controls
 function displayVideos() {
   $("#controls").hidden = false
   $("#videos").hidden = false
   $("#roomControls").hidden = true
 }
 
+// Helper function that loads the room list from the canister and creates join-buttons in the HTML
 function refreshRooms() {
   const ul = $("#roomList");
   ul.textContent = '';
@@ -310,6 +313,11 @@ function refreshRooms() {
     ul.appendChild(newLi);
   })
 }
+
+//5. THING TO CALL AT ONLOAD
+
+//5.1 This part is executed when the JS loads, the front-end asks the canister for a principal ID
+// it can use in future calls as an identifier. It also loads the initial room list.
 
 let callerP = magnify.ping()
 let roomsP = magnify.listAllRooms()

@@ -8,7 +8,7 @@ actor {
 
     type RoomId = Nat;
 
-    //1.1 Every offer is currently one to one so it has one initiator and one recipient
+    //1.1 Every offer has one initiator, one recipient, and belongs to one room
     type Offer = {
         initiator : Principal;
         recipient : Principal;
@@ -16,17 +16,19 @@ actor {
         roomId : RoomId;
     };
 
-    //1.2 Every answer has only one offer and one person who can answer
+    //1.2 Every answer relates to one offer
     type Answer = {
         offer : Offer;
         answer : Text;
     };
 
+    //1.3 Every participant has a principal and a name
     type Participant = {
         principal : Principal;
         alias : Text;
     };
 
+    // 1.4 A room has an identifier and a list of participants
     type Room = {
         roomId : RoomId;
         participants : List.List<Participant>;
@@ -40,10 +42,11 @@ actor {
     //2.2 A List of acceptances
     flexible var acceptances : List.List<Answer> = List.nil();
 
+    //2.3 The most recent room identifier and the list of available rooms
     flexible var roomIdSupply : Nat = 0;
-    //2.3 Our available rooms
     flexible var rooms : List.List<Room> = List.nil();
 
+    // Increase the latest room identifier and return
     func freshRoomId() : Nat {
         roomIdSupply += 1;
         roomIdSupply
@@ -51,6 +54,8 @@ actor {
 
     //3. OUR APIS
 
+    //3.1 UPDATE function that creates a new room. Sets the alias of the creator
+    // of the room and returns the room identifier.
     public shared {caller} func createRoom(creatorAlias : Text) : async RoomId {
         let room = freshRoomId();
         rooms := List.push({ roomId = room; participants = List.singleton({
@@ -60,10 +65,13 @@ actor {
         room
     };
 
+    //3.2 QUERY function that returns an array containing all room identifiers.
     public query func listAllRooms() : async [RoomId] {
         List.toArray(List.map(rooms, func({ roomId }: Room): RoomId = roomId))
     };
 
+    //3.3 QUERY function that returns the list of participants of a given room.
+    // Returns null if the room does not exist.
     public query func participants(room : RoomId) : async (?[Participant]) {
         switch(findRoom(room)) {
             case null null;
@@ -71,42 +79,24 @@ actor {
         }
     };
 
-    //3.1 QUERY function for the front-end to get the Principal ID assigned to that user/caller
+    //3.4 QUERY function for the front-end to get the Principal ID assigned to that user/caller
     //typially used when the user sets their alias at the beginning
     public query {caller} func ping() : async Principal {
         return caller
     };
 
-    func isParticipantInRoom(participant : Principal, room : RoomId) : Bool {
-        switch (findRoom(room)) {
-            case null false;
-            case (?room) {
-                Option.isSome(
-                    List.find(room.participants, func (p : Participant): Bool = p.principal == participant)
-                )
-            }
-        }
-    };
-
-    func findRoom(room : RoomId) : ?Room =
-        List.find(rooms, func ({ roomId }: Room): Bool = room == roomId);
-
-    func updateRoom(room : RoomId, f : (Room) -> Room) {
-        rooms := List.map(rooms, func (r : Room): Room { 
-            if (r.roomId == room) { 
-                f(r) 
-            } else { 
-                r
-            } })
-    };
-
-    //3.2 This UPDATE function is used by a user to send an "offer" to a second party to initiate the
-    //the video chat connection. Once the first user creates an offer, it is stored in the canister...
-    //but it the parties are not YET connected. The second party must explicitly "answer" the offer.
-    //The usual flow is thus like this:
-    //1. Alice sends Offer to Bob
-    //2. Bob answers Alice's offer
-    //3. Alice and Bob are now connected
+    //3.5 This UPDATE function is used by a user to send an "offer" to a second party to initiate the
+    // the video chat connection. Once the first user creates an offer, it is stored in the canister...
+    // but it the parties are not YET connected. The second party must explicitly "answer" the offer.
+    // The usual flow is thus like this:
+    // 1. Alice sends Offer to Bob
+    // 2. Bob answers Alice's offer
+    // 3. Alice and Bob are now connected
+    //
+    // The offer is tied to a given room. The initiator must be in the room already. The recipient
+    // is added to the room if necessary. In that case, the partnerName specified by the initiator
+    // is used as the alias of the recipient. If the offer already exists in that room in either
+    // the same or the opposite direction, adding it again fails.
     public shared {caller} func offer(room : RoomId, partner : Principal, partnerName : ?Text, sdp : Text) : async (?Text) {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
@@ -150,7 +140,7 @@ actor {
         null
     };
 
-    //3.3 QUERY function to return the offers for the caller
+    //3.6 QUERY function to return the offers for the caller
     public query {caller} func offers(room : RoomId) : async [Offer] {
         return List.toArray(
             List.filter(openOffers, func (offer : Offer) : Bool {
@@ -159,14 +149,13 @@ actor {
         );
     };
 
-
-    //3.4 this UPDATE function's argument is the index of the offers array that we should be accepting
-    //This function is used only on existing offers. Once a user accepts an offer, then they will
-    //be connected via WebRTC for video chat. They will not be connected until the offer is answered.
-     //The usual flow is thus like this:
-    //1. Alice sends Offer to Bob
-    //2. Bob answers Alice's offer
-    //3. Alice and Bob are now connected
+    //3.7 The arguments of this UPDATE function specify the room and the initiator whose offer
+    // we want to accept. This function is used only on existing offers. Once a user accepts
+    // an offer, then they will be connected via WebRTC for video chat. They will not be
+    // connected until the offer is answered. The usual flow is thus like this:
+    // 1. Alice sends Offer to Bob
+    // 2. Bob answers Alice's offer
+    // 3. Alice and Bob are now connected
     public shared {caller} func answer(room : RoomId, partner : Principal, sdp : Text) : async ?Text {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
@@ -187,7 +176,7 @@ actor {
         }
     };
 
-    //3.5 This QUERY function returns the answers for the caller
+    //3.8 This QUERY function returns the answers for the caller
     public query {caller} func answers(room : RoomId) : async [Answer] {
         return List.toArray(
             List.filter(acceptances, func (answer : Answer) : Bool {
@@ -205,4 +194,31 @@ actor {
             offer.roomId == room and offer.initiator == initiator and offer.recipient == recipient
     };
 
+    //4.2 Helper function that checks whether a principal is in a given room
+    func isParticipantInRoom(participant : Principal, room : RoomId) : Bool {
+        switch (findRoom(room)) {
+            case null false;
+            case (?room) {
+                Option.isSome(
+                    List.find(room.participants, func (p : Participant): Bool = p.principal == participant)
+                )
+            }
+        }
+    };
+
+    //4.3 Helper function that searches the list of all rooms for a specific one
+    func findRoom(room : RoomId) : ?Room {
+        List.find(rooms, func ({ roomId }: Room): Bool = room == roomId);
+    };
+
+    //4.4 Helper function that updates one room in the list. The room is identified
+    // by its identifier, and the function Room -> Room specifies the change
+    func updateRoom(room : RoomId, f : (Room) -> Room) {
+        rooms := List.map(rooms, func (r : Room): Room { 
+            if (r.roomId == room) { 
+                f(r) 
+            } else { 
+                r
+            } })
+    };
 };
