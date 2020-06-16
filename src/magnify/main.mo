@@ -13,7 +13,6 @@ actor {
         initiator : Principal;
         recipient : Principal;
         offer : Text;
-        initiatorAlias: Text;
         roomId : RoomId;
     };
 
@@ -21,7 +20,6 @@ actor {
     type Answer = {
         offer : Offer;
         answer : Text;
-        answererAlias: Text;
     };
 
     type Participant = {
@@ -109,7 +107,7 @@ actor {
     //1. Alice sends Offer to Bob
     //2. Bob answers Alice's offer
     //3. Alice and Bob are now connected
-    public shared {caller} func offer(room : RoomId, partner : Principal, partnerName : ?Text, initiatorName: Text, sdp : Text) : async (?Text) {
+    public shared {caller} func offer(room : RoomId, partner : Principal, partnerName : ?Text, sdp : Text) : async (?Text) {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
         };
@@ -148,7 +146,6 @@ actor {
             initiator = caller;
             recipient = partner;
             offer = sdp;
-            initiatorAlias = initiatorName;
         }, openOffers);
         null
     };
@@ -170,7 +167,7 @@ actor {
     //1. Alice sends Offer to Bob
     //2. Bob answers Alice's offer
     //3. Alice and Bob are now connected
-    public shared {caller} func answer(room : RoomId, partner : Principal, answererAliasName: Text, sdp : Text) : async ?Text {
+    public shared {caller} func answer(room : RoomId, partner : Principal, sdp : Text) : async ?Text {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
         };
@@ -184,7 +181,6 @@ actor {
                 acceptances := List.push({
                     offer = myOffer;
                     answer = sdp;
-                    answererAlias = answererAliasName;
                 }, acceptances);
                 null
             }

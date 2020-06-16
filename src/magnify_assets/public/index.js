@@ -19,15 +19,13 @@ const principalFromHex = hex => CanisterId.fromHex(hex)
 document.body.innerHTML = /*html*/`
   <div id="info">
     <div id="userInfo">
-      <div id="callerId"> Hello!!</div>
+      <div id="callerId">Hello!!</div>
     </div>
-    <label id="aliasInputLabel" for=aliasInput>Input your Alias to get an ID:</label>
-    <input id="aliasInput">
-    <button id="aliasButton" type="button">Alias</button>
   </div>
   <br>
-  <br>
   <div id="roomControls">
+    <label id="aliasInputLabel" for=aliasInput>Input your Alias:</label>
+    <input id="aliasInput">
     <button id="createRoomButton">Create Room</button>
     <button id="refreshRoomList">Refresh Rooms</button>
     <ul id="roomList"></ul>
@@ -35,6 +33,8 @@ document.body.innerHTML = /*html*/`
   <div id="controls" hidden="true">
     <label for=partnerInput>Partner:</label>
     <input id="partnerInput">
+    <label if="partnerAliasLabel" for=partnerAlias>Alias:</label>
+    <input id="partnerAlias">
     <button id="offerButton" type="button">Offer</button>
     <button id="answerButton" type="button">Answer</button>
     <button id="listOffersButton" type="button">List offers</button>
@@ -58,6 +58,7 @@ document.body.innerHTML = /*html*/`
 
 let allOffers = []
 let allRooms = []
+let allParticipants = []
 
 let localStream
 let localVideo = $("#localVideo")
@@ -69,7 +70,6 @@ let initiatorTimer
 let waitForIceDelay
 let iceCandidates = []
 let callerId =  'TBD';
-let alias = '';
 let activeRoom;
 
 
@@ -89,7 +89,7 @@ const sendOffer = recipient => {
       return rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.offer(activeRoom, recipient, ["partner"], alias, JSON.stringify({
+        magnify.offer(activeRoom, recipient, [$("#partnerAlias").value], JSON.stringify({
           ice: iceCandidates,
           description: rtcPeerConnection.localDescription
         }))
@@ -130,7 +130,7 @@ const sendAnswer = (offerIndex) => {
       return rtcPeerConnection.setLocalDescription(answer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.answer(activeRoom, offer.initiator, alias, JSON.stringify({
+        magnify.answer(activeRoom, offer.initiator, JSON.stringify({
           description: rtcPeerConnection.localDescription,
           ice: iceCandidates
         }))
@@ -194,6 +194,15 @@ const addRemoteIceCandidates = candidates => {
   }
 }
 
+function getAliasForParticipant(principal) {
+  console.log(principal)
+  for (const participant of allParticipants) {
+    if (participant.principal._idHex == principal._idHex) {
+      return participant.alias
+    }
+  }
+}
+
 //4. UI AND EVENT HANDLERS
 
 //4.1 This button is clicked by the caller to send an offer to a recipient
@@ -201,25 +210,6 @@ $("#offerButton").addEventListener("click", ev => {
   const callerId = $("#partnerInput").value;
   sendOffer(principalFromHex(callerId))
 })
-
-//the user chooses what they want to be called by inputting an ALIAS input 
-//and changing the HTML... the ALIAS html is then used by magnify.answer()
-//Note: that ALIAS is stored in the front-end, until it is sent to magnify.answer()
-$("#aliasButton").addEventListener("click", ev => {
-  
-  //update the local JS varialbes AND the HTML so it shows the right info
-  const aliasInput = $("#aliasInput").value;
-  alias = aliasInput;
-  $("#callerId").innerText = `Welcome, ${aliasInput}!`;
-  $("#aliasInputLabel").innerText = `Change your Alias:`;
-
-  //create a new div with to show the callerId and append it
-  let userInfoDiv = document.getElementById("userInfo");
-  let innerDiv = document.createElement('div');
-  innerDiv.innerText = `Your ID: ${callerId}`;
-  userInfoDiv.appendChild(innerDiv);
-
-});
 
 //4.2 This button is clicked by a recipient to answer an offer and join a WebRTC call
 $("#answerButton").addEventListener("click", ev => {
@@ -239,13 +229,13 @@ $("#listOffersButton").addEventListener("click", ev => {
       console.log(`offer has index: ${index}`);
       console.log(offer);
       const newLi = document.createElement("li");
-      newLi.textContent = `${offer.initiatorAlias} => you    `;
+      newLi.textContent = `${getAliasForParticipant(offer.initiator)} => you    `;
       ul.appendChild(newLi);
 
       //add button so the user can answer the offer
       const newAnswerButton = document.createElement("button");
       newAnswerButton.id = `answerButton-${index}`;
-      newAnswerButton.innerText = `Answer offer #${index} from ${offer.initiatorAlias}`;
+      newAnswerButton.innerText = `Answer offer #${index} from ${getAliasForParticipant(offer.initiator)}`;
       newLi.appendChild(newAnswerButton);
       //we use const in order to avoid closure/scope unpredictability
       //we the closure scope in the addEventListener
@@ -278,6 +268,7 @@ $("#refreshRoomList").addEventListener("click", () => {
 })
 
 $("#createRoomButton").addEventListener("click", () => {
+  let alias = $("#aliasInput").value;
   magnify.createRoom(alias).then(room => {
     allRooms.push(room)
     activeRoom = room
@@ -311,6 +302,10 @@ function refreshRooms() {
     useRoomButton.addEventListener("click", ev => {
       activeRoom = room
       displayVideos()
+      magnify.participants(room).then(participants => {
+        allParticipants = participants[0]
+        console.log(participants[0])
+      })
     });
     ul.appendChild(newLi);
   })
@@ -324,6 +319,7 @@ callerP.then(caller =>
       console.log(`fetched the caller ID: ${caller._idHex}`);
       //add it to the local variables (for easier retrieval in the front-end)
       callerId = caller._idHex;
+      $("#callerId").innerText = `Welcome, ${callerId}!`;
       allRooms = rooms;
       refreshRooms()
 }))
