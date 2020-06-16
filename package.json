@@ -8,6 +8,8 @@
   },
   "devDependencies": {
     "@dfinity/agent": "~/.cache/dfinity/versions/0.5.8/js-user-library",
+    "css-loader": "^3.6.0",
+    "style-loader": "^1.2.1",
     "terser-webpack-plugin": "2.2.2",
     "webpack": "4.41.3",
     "webpack-cli": "3.3.10"
