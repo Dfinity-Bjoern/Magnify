@@ -160,7 +160,7 @@ const sendAnswer = (offerIndex) => {
 // Set up a room and continue
 function setupRoomLocalAnd(completion) {
   // TODO(Christoph): video to true
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
 
@@ -186,7 +186,7 @@ function checkForAdditions() {
     for (const participant of allParticipants) {
       if (!isParticipantInConnections(participant.principal) && participant.principal._idHex != callerId) {
         console.log(`Sending an offer to ${participant.principal._idHex}`)
-        sendOffer(participant.principal)
+        sendOffer(participant.principal, participant.alias)
       }
     }
   })
@@ -271,58 +271,6 @@ function getAliasForParticipant(principal) {
 }
 
 //4. UI AND EVENT HANDLERS
-
-//4.1 This button is clicked by the caller to send an offer to a recipient
-
-//4.3 This button is clicked by any user to see all the offers available
-// $("#listOffersButton").addEventListener("click", ev => {
-//   const ul = $("#offers");
-//   magnify.offers(activeRoom).then(offers => {
-//     allOffers = offers
-//     ul.textContent = '';
-
-//     offers.forEach((offer, index) => {
-//       console.log(`offer has index: ${index}`);
-//       console.log(offer);
-//       const newLi = document.createElement("li");
-//       newLi.textContent = `${getAliasForParticipant(offer.initiator)} => you    `;
-//       ul.appendChild(newLi);
-
-//       //add button so the user can answer the offer
-//       const newAnswerButton = document.createElement("button");
-//       newAnswerButton.id = `answerButton-${index}`;
-//       newAnswerButton.innerText = `Answer offer #${index} from ${getAliasForParticipant(offer.initiator)}`;
-//       newLi.appendChild(newAnswerButton);
-//       //we use const in order to avoid closure/scope unpredictability
-//       //we the closure scope in the addEventListener
-//       const offerIndex = index; 
-//       $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
-//         sendAnswer(offerIndex);
-//       });
-//     })
-//   })
-// })
-
-//4.4 This button is clicked by any user to see all the answers available
-// $("#listAnswersButton").addEventListener("click", ev => {
-//   const ul = $("#answers");
-//   magnify.answers(activeRoom).then(answers => {
-//     ul.textContent = '';
-//     answers.forEach(answer => {
-//       const newLi = document.createElement("li")
-//       newLi.textContent = `${answer.offer.initiator._idHex} => ${answer.offer.recipient._idHex}`;
-//       ul.appendChild(newLi);
-//     })
-//   })
-// })
-
-//4.5 This button is clicked to refresh the list of available rooms
-// $("#refreshRoomList").addEventListener("click", () => {
-//   magnify.listAllRooms().then(rooms => {
-//     allRooms = rooms
-//     refreshRooms()
-//   })
-// })
 
 // Helper function that loads the room list from the canister and creates join-buttons in the HTML
 function refreshRooms() {
