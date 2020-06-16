@@ -3,6 +3,9 @@ import Utils "Utils";
 
 actor {
 
+    //1. TYPES
+
+    //1.1 Every offer is currently one to one so it has one initiator and one recipient
     type Offer = {
         initiator : Principal;
         recipient : Principal;
@@ -10,20 +13,30 @@ actor {
         initiatorAlias: Text;
     };
 
+    //1.2 Every answer has only one offer and one person who can answer
     type Answer = {
         offer : Offer;
         answer : Text;
         answererAlias: Text;
     };
 
+    //2. OUR STATE
+
+    //2.1 A List of offers which have not been accepted
     flexible var openOffers : List.List<Offer> = List.nil();
+
+    //2.2 A List of acceptances
     flexible var acceptances : List.List<Answer> = List.nil();
 
+    //3. OUR APIS
+
+    //3.1 QUERY function for the front-end to get the Principal ID assigned to that user/caller
+    //typially used when the user sets their alias at the beginning
     public query {caller} func ping() : async Principal {
         return caller
     };
 
-    //This function is used by a user to send an "offer" to a second party to initiate the
+    //3.2 This UPDATE function is used by a user to send an "offer" to a second party to initiate the
     //the video chat connection. Once the first user creates an offer, it is stored in the canister...
     //but it the parties are not YET connected. The second party must explicitly "answer" the offer.
     //The usual flow is thus like this:
@@ -39,16 +52,12 @@ actor {
         }, openOffers);
     };
 
+    //3.3 QUERY function to return ALL of the offers (whether the caller is involved or not)
     public query func offers() : async [Offer] {
         return List.toArray(openOffers);
     };
 
-    func matchOffer(initiator : Principal, recipient : Principal) : (Offer) -> Bool {
-        func (offer : Offer) : Bool =
-            offer.initiator == initiator and offer.recipient == recipient
-    };
-
-    //this function's argument is the index of the offers array that we should be accepting
+    //3.4 this UPDATE function's argument is the index of the offers array that we should be accepting
     //This function is used only on existing offers. Once a user accepts an offer, then they will
     //be connected via WebRTC for video chat. They will not be connected until the offer is answered.
      //The usual flow is thus like this:
@@ -72,8 +81,18 @@ actor {
         }
     };
 
+    //3.5 This QUERY function returns all of the answers
     public query func answers() : async [Answer] {
         return List.toArray(acceptances);
+    };
+
+    //4. HELPER FUNCTIONS
+
+    //4.1 A helper function used to check the list of offers and return those with the same
+    //(initiator, recipient) tuple
+    func matchOffer(initiator : Principal, recipient : Principal) : (Offer) -> Bool {
+        func (offer : Offer) : Bool =
+            offer.initiator == initiator and offer.recipient == recipient
     };
 
 };

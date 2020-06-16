@@ -68,7 +68,7 @@ let alias = '';
 
 //3. FUNCTIONS
 
-//sendOffer() -> () 
+//3.1 sendOffer() -> () 
 //This function is used by a user to send an "offer" to a second party to initiate the
 //the video chat connection. Once the first user creates an offer, it is stored in the canister...
 //but it the parties are not YET connected. The second party must explicitly "answer" the offer.
@@ -108,7 +108,7 @@ const sendOffer = recipient => {
   .catch(err => console.error(`Failed to connect 1: ${err}`))
 }
 
-// sendAnswer(offerIndex: Integer) -> ()
+//3.2 sendAnswer(offerIndex: Integer) -> ()
 //this function's argument is the index of the offers array that we should be accepting
 //This function is used only on existing offers. Once a user accepts an offer, then they will
 //be connected via WebRTC for video chat. They will not be connected until the offer is answered.
@@ -189,7 +189,13 @@ const onTrack = event => {
   remoteStream.addTrack(event.track, remoteStream)
 }
 
-// Needed for cross-machine calls
+// 3.5 onIceCandidate() is Needed for cross-machine calls
+// "ICE" is a concept for the WebRTC protocol. 
+// ICE utilizes different technologies and protocols to overcome the challenges posed 
+// by different types of NAT mappings
+// It can be simplified with this example: 
+// a user is behind a firewall with many machines, but wants to establish a P2P connection 
+//ICE is critical for WebRTC: https://temasys.io/webrtc-ice-sorcery/
 const onIceCandidate = event => {
   console.log("onIceCandidate:", event)
   if (event.candidate) {
@@ -201,8 +207,9 @@ const onIceCandidate = event => {
 }
 
 
-//4. UI ANDEVENT HANDLERS
+//4. UI AND EVENT HANDLERS
 
+//4.1 This button is clicked by the caller to send an offer to a recipient
 $("#offerButton").addEventListener("click", ev => {
   const callerId = $("#partnerInput").value;
   sendOffer(principalFromHex(callerId))
@@ -227,12 +234,14 @@ $("#aliasButton").addEventListener("click", ev => {
 
 });
 
+//4.2 This button is clicked by a recipient to answer an offer and join a WebRTC call
 $("#answerButton").addEventListener("click", ev => {
   // TODO Actually select the offer you want to answer
   let offerIndex = 0;
   sendAnswer(offerIndex);
 });
 
+//4.3 This button is clicked by any user to see all the offers available
 $("#listOffersButton").addEventListener("click", ev => {
   const ul = $("#offers");
   magnify.offers().then(offers => {
@@ -275,6 +284,7 @@ $("#listOffersButton").addEventListener("click", ev => {
             sendAnswer(offerIndex);
           });
         } else if (offerIsFromCaller) {
+          //if the offer is from the caller... then we do not add a button to answer
           newLi.textContent = `you => ${offer.recipient._idHex}`;
           ul.appendChild(newLi);
         } else {
@@ -287,6 +297,7 @@ $("#listOffersButton").addEventListener("click", ev => {
   })
 })
 
+//4.3 This button is clicked by any user to see all the answers available
 $("#listAnswersButton").addEventListener("click", ev => {
   const ul = $("#answers");
   magnify.answers().then(answers => {
@@ -299,6 +310,11 @@ $("#listAnswersButton").addEventListener("click", ev => {
   })
 })
 
+
+//5. THING TO CALL AT ONLOAD
+
+//5.1 This function is called when the JS loads, the front-end asks the canister for a principal ID
+// it can use in future calls as an identifier
 magnify.ping().then(caller => {
   // $("#callerId").innerText = `Hello ${caller._idHex}`;
   console.log(`fetched the caller ID: ${caller._idHex}`);
