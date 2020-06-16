@@ -55,13 +55,13 @@ let allOffers = []
 
 let localStream
 let localVideo = $("#localVideo")
-let remoteStream
+let remoteStream = new MediaStream()
 let remoteVideo = $("#remoteVideo")
 let rtcPeerConnection
 let iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] }
 let initiatorTimer
 let waitForIceDelay
-let iceCones = []
+let iceCandidates = []
 let callerId =  'TBD';
 let alias = '';
 
@@ -77,9 +77,74 @@ let alias = '';
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
 const sendOffer = recipient => {
+  setupLocalAndComplete(() => {
+    rtcPeerConnection.createOffer().then(offer => {
+      return rtcPeerConnection.setLocalDescription(offer)
+    }).then(() => {
+      waitForIceDelay = setTimeout(() => {
+        magnify.offer(recipient, alias, JSON.stringify({
+          ice: iceCandidates,
+          description: rtcPeerConnection.localDescription
+        }))
+      }, 2000)
+    })
+    .catch(e => console.log(e))
+
+    initiatorTimer = setInterval(pollAnswer, 1000)
+  })
+}
+
+//3.2 sendAnswer(offerIndex: Integer) -> ()
+//this function's argument is the index of the offers array that we should be accepting
+//This function is used only on existing offers. Once a user accepts an offer, then they will
+//be connected via WebRTC for video chat. They will not be connected until the offer is answered.
+const sendAnswer = (offerIndex) => {
+  const offer = allOffers[offerIndex];
+  console.log(`sending answer for offer ${offerIndex} of ${allOffers.length}`);
+
+  setupLocalAndComplete(() => {
+    var details = JSON.parse(offer.offer)
+    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+    addRemoteIceCandidates(details.ice)
+
+    rtcPeerConnection.createAnswer().then(answer => {
+      return rtcPeerConnection.setLocalDescription(answer)
+    }).then(() => {
+      waitForIceDelay = setTimeout(() => {
+        magnify.answer(offer.initiator, alias, JSON.stringify({
+          description: rtcPeerConnection.localDescription,
+          ice: iceCandidates
+        }))
+      }, 2000)
+    })
+    .catch(e => console.log(e))
+  })
+}
+
+const pollAnswer = () => {
+  console.log("pollAnswer")
+  let answers = magnify.answers().then(answers => {
+    console.log(answers.length)
+    if (answers.length > 0) {
+      var details = JSON.parse(answers[0].answer)
+      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+      addRemoteIceCandidates(details.ice)
+      clearInterval(initiatorTimer)
+    }
+  })
+}
+
+// Receiving a track (i.e. audio or video data stream) from the remote
+// partner, add it to the video display.
+const onTrack = event => {
+  remoteVideo.srcObject = remoteStream
+  remoteStream.addTrack(event.track, remoteStream)
+}
+
+// Set up the local streaming and execute the completion
+const setupLocalAndComplete = (completion) => {
   // TODO(Christoph): video to true
   navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
-    console.log("stream", stream)
     localStream = stream
     localVideo.srcObject = stream
 
@@ -91,102 +156,8 @@ const sendOffer = recipient => {
       rtcPeerConnection.addTrack(track);
     }
 
-    rtcPeerConnection.createOffer().then(offer => {
-      return rtcPeerConnection.setLocalDescription(offer)
-    }).then(() => {
-      waitForIceDelay = setTimeout(() => {
-        magnify.offer(recipient, alias, JSON.stringify({
-          ice: iceCones,
-          description: rtcPeerConnection.localDescription
-        }))
-      }, 2000)
-    })
-    .catch(e => console.log(e))
-
-    initiatorTimer = setInterval(pollAnswer, 1000)
-  })
-  .catch(err => console.error(`Failed to connect 1: ${err}`))
-}
-
-//3.2 sendAnswer(offerIndex: Integer) -> ()
-//this function's argument is the index of the offers array that we should be accepting
-//This function is used only on existing offers. Once a user accepts an offer, then they will
-//be connected via WebRTC for video chat. They will not be connected until the offer is answered.
-const sendAnswer = (offerIndex) => {
-  const offer = allOffers[offerIndex];
-  console.log(`sending answer for offer ${offerIndex} of ${allOffers.length}`);
-
-  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
-    console.log("answer stream", stream)
-    localStream = stream
-    localVideo.srcObject = stream
-
-    rtcPeerConnection = new RTCPeerConnection(iceServers)
-    rtcPeerConnection.onicecandidate = onIceCandidate
-    rtcPeerConnection.ontrack = onTrack
-
-    for (const track of localStream.getTracks()) {
-      rtcPeerConnection.addTrack(track)
-    }
-
-    console.log("offer.offer", offer.offer)
-    var details = JSON.parse(offer.offer)
-    console.log("Done parsing")
-    rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-    console.log("setting ice")
-    for (const c of details.ice) {
-      const candidate = new RTCIceCandidate({
-        sdpMLineIndex: c.label,
-        candidate: c.candidate
-      })
-      rtcPeerConnection.addIceCandidate(candidate)
-    }
-
-    console.log("creating answer")
-    rtcPeerConnection.createAnswer().then(answer => {
-      console.log("setting local desc")
-      return rtcPeerConnection.setLocalDescription(answer)
-    }).then(() => {
-      waitForIceDelay = setTimeout(() => {
-        magnify.answer(offer.initiator, alias, JSON.stringify({
-          description: rtcPeerConnection.localDescription,
-          ice: iceCones
-        }))
-      }, 2000)
-    })
-    .catch(e => console.log(e))
-  })
-  .catch(err => console.error(`Failed to connect 2: ${err}`))
-}
-
-const pollAnswer = () => {
-  console.log("pollAnswer")
-  let answers = magnify.answers().then(answers => {
-    console.log(answers.length)
-    if (answers.length > 0) {
-      var details = JSON.parse(answers[0].answer)
-      rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
-      for (const c of details.ice) {
-        const candidate = new RTCIceCandidate({
-          sdpMLineIndex: c.label,
-          candidate: c.candidate
-        })
-        rtcPeerConnection.addIceCandidate(candidate)
-      }
-      clearInterval(initiatorTimer)
-    }
-  })
-}
-
-const onTrack = event => {
-  console.log("addtrack")
-
-  if (!remoteStream) {
-    remoteStream = new MediaStream()
-  }
-
-  remoteVideo.srcObject = remoteStream
-  remoteStream.addTrack(event.track, remoteStream)
+    completion()
+  }).catch(err => console.error(`Failed to connect 1: ${err}`))
 }
 
 // 3.5 onIceCandidate() is Needed for cross-machine calls
@@ -199,13 +170,23 @@ const onTrack = event => {
 const onIceCandidate = event => {
   console.log("onIceCandidate:", event)
   if (event.candidate) {
-    iceCones.push({
+    iceCandidates.push({
       label: event.candidate.sdpMLineIndex,
       candidate: event.candidate.candidate
     })
   }
 }
 
+// Add ICE candidates received from the partner to local WebRTC object
+const addRemoteIceCandidates = candidates => {
+  for (const c of candidates) {
+    const candidate = new RTCIceCandidate({
+      sdpMLineIndex: c.label,
+      candidate: c.candidate
+    })
+    rtcPeerConnection.addIceCandidate(candidate)
+  }
+}
 
 //4. UI AND EVENT HANDLERS
 
@@ -252,47 +233,20 @@ $("#listOffersButton").addEventListener("click", ev => {
       console.log(`offer has index: ${index}`);
       console.log(offer);
       const newLi = document.createElement("li");
+      newLi.textContent = `${offer.initiatorAlias} => you    `;
+      ul.appendChild(newLi);
 
-      let offerIsForCaller;
-      let offerIsFromCaller;
-      //this assumes you cannot send an offer to yourself...
-      if (offer.recipient._idHex === callerId) {
-        offerIsForCaller = true;
-        offerIsFromCaller = false;
-      } else {
-        offerIsForCaller = false;
-        offerIsFromCaller = true;
-      }
-
-
-        //Only if the offer is for the caller, do we add it a button to answer the offer
-        if (offerIsForCaller) {
-          // let offererText = (offer.initiator._idHex === callerId) ? 'you' : `${offer.initiatorAlias}`;
-          newLi.textContent = `${offer.initiatorAlias} => you    `;
-          ul.appendChild(newLi);
-    
-          //add button so the user can answer the offer
-          const newAnswerButton = document.createElement("button");
-          newAnswerButton.id = `answerButton-${index}`;
-          newAnswerButton.innerText = `Answer offer #${index} from ${offer.initiatorAlias}`;
-          newLi.appendChild(newAnswerButton);
-          //we use const in order to avoid closure/scope unpredictability
-          //we the closure scope in the addEventListener
-          const offerIndex = index; 
-          $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
-            // TODO Actually select the offer you want to answer
-            sendAnswer(offerIndex);
-          });
-        } else if (offerIsFromCaller) {
-          //if the offer is from the caller... then we do not add a button to answer
-          newLi.textContent = `you => ${offer.recipient._idHex}`;
-          ul.appendChild(newLi);
-        } else {
-         //caller is not involved with the offer (no button added)
-          newLi.textContent = `${offer.initiator._idHex} => ${offer.recipient._idHex}`;
-          ul.appendChild(newLi);
-        } 
-      
+      //add button so the user can answer the offer
+      const newAnswerButton = document.createElement("button");
+      newAnswerButton.id = `answerButton-${index}`;
+      newAnswerButton.innerText = `Answer offer #${index} from ${offer.initiatorAlias}`;
+      newLi.appendChild(newAnswerButton);
+      //we use const in order to avoid closure/scope unpredictability
+      //we the closure scope in the addEventListener
+      const offerIndex = index; 
+      $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
+        sendAnswer(offerIndex);
+      });
     })
   })
 })

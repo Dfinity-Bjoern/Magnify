@@ -52,9 +52,13 @@ actor {
         }, openOffers);
     };
 
-    //3.3 QUERY function to return ALL of the offers (whether the caller is involved or not)
-    public query func offers() : async [Offer] {
-        return List.toArray(openOffers);
+    //3.3 QUERY function to return the offers for the caller
+    public query {caller} func offers() : async [Offer] {
+        return List.toArray(
+            List.filter(openOffers, func (offer : Offer) : Bool {
+                offer.recipient == caller
+            })
+        );
     };
 
     //3.4 this UPDATE function's argument is the index of the offers array that we should be accepting
@@ -81,9 +85,13 @@ actor {
         }
     };
 
-    //3.5 This QUERY function returns all of the answers
-    public query func answers() : async [Answer] {
-        return List.toArray(acceptances);
+    //3.5 This QUERY function returns the answers for the caller
+    public query {caller} func answers() : async [Answer] {
+        return List.toArray(
+            List.filter(acceptances, func (answer : Answer) : Bool {
+                answer.offer.initiator == caller
+            })
+        );
     };
 
     //4. HELPER FUNCTIONS
