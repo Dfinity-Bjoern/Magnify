@@ -33,23 +33,6 @@ document.body.innerHTML = /*html*/`
     </div>
   </div>
   <br>
-  <h1>The flex-wrap Property</h1>
-
-  <p>The "flex-wrap: wrap;" specifies that the flex items will wrap if necessary:</p>
-  <div class="flex-container">
-    <div>1</div>
-    <div>2</div>
-    <div>3</div>  
-    <div>4</div>
-    <div>5</div>
-    <div>6</div>  
-    <div>7</div>
-    <div>8</div>
-    <div>9</div>  
-    <div>10</div>
-    <div>11</div>
-    <div>12</div>  
-  </div>
 
   <div id="roomControls">
     <label id="aliasInputLabel" for=aliasInput>Input your Alias:</label>
@@ -71,11 +54,40 @@ document.body.innerHTML = /*html*/`
     <ul id="offers"></ul>
     <h2>Answers:</h2>
     <ul id="answers"></ul>
-  <div>
+  </div>
   <div id="videos" hidden="true">
     <video id="localVideo" autoplay muted></video>
     <video id="remoteVideo" autoplay></video>
   </div>
+
+  <h1>PLACEHOLDER: The flex-wrap tests with hard-coded videos and boxes</h1>
+
+  <div class="flex-container">
+        <video id="1" controls></video>
+        <video id="2" controls></video>
+        <video id="3" controls></video>
+        <video id="4" controls></video>
+        <video id="5" controls></video>
+  </div>
+
+  <div class="flex-container">
+        <div></div>
+        <div>2</div>
+        <div>3</div>  
+        <div>4</div>
+        <div>5</div>
+        <div>6</div>  
+        <div>7</div>
+        <div>8</div>
+        <div>9</div>  
+        <div>10</div>
+        <div>11</div>
+        <div>12</div>  
+    </div>
+  
+
+  
+
   </main>
 `;
 
