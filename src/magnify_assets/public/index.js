@@ -243,23 +243,45 @@ $("#listOffersButton").addEventListener("click", ev => {
       console.log(`offer has index: ${index}`);
       console.log(offer);
       const newLi = document.createElement("li");
-      let offererText = (offer.initiator._idHex === callerId) ? 'you' : `${offer.initiatorAlias}`;
-      let recipientText = (offer.recipient._idHex === callerId) ? 'you' : `${offer.recipient._idHex}`;
-      newLi.textContent = `${offererText} => ${recipientText}     `;
-      ul.appendChild(newLi);
 
-      //add button so the user can answer the offer
-      const newAnswerButton = document.createElement("button");
-      newAnswerButton.id = `answerButton-${index}`;
-      newAnswerButton.innerText = `Answer offer #${index} from  ${offererText}`;
-      newLi.appendChild(newAnswerButton);
-      //we use const in order to avoid closure/scope unpredictability
-      //we the closure scope in the addEventListener
-      const offerIndex = index; 
-      $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
-        // TODO Actually select the offer you want to answer
-        sendAnswer(offerIndex);
-      });
+      let offerIsForCaller;
+      let offerIsFromCaller;
+      //this assumes you cannot send an offer to yourself...
+      if (offer.recipient._idHex === callerId) {
+        offerIsForCaller = true;
+        offerIsFromCaller = false;
+      } else {
+        offerIsForCaller = false;
+        offerIsFromCaller = true;
+      }
+
+
+        //Only if the offer is for the caller, do we add it a button to answer the offer
+        if (offerIsForCaller) {
+          // let offererText = (offer.initiator._idHex === callerId) ? 'you' : `${offer.initiatorAlias}`;
+          newLi.textContent = `${offer.initiatorAlias} => you    `;
+          ul.appendChild(newLi);
+    
+          //add button so the user can answer the offer
+          const newAnswerButton = document.createElement("button");
+          newAnswerButton.id = `answerButton-${index}`;
+          newAnswerButton.innerText = `Answer offer #${index} from ${offer.initiatorAlias}`;
+          newLi.appendChild(newAnswerButton);
+          //we use const in order to avoid closure/scope unpredictability
+          //we the closure scope in the addEventListener
+          const offerIndex = index; 
+          $(`#answerButton-${offerIndex}`).addEventListener("click", ev => {
+            // TODO Actually select the offer you want to answer
+            sendAnswer(offerIndex);
+          });
+        } else if (offerIsFromCaller) {
+          newLi.textContent = `you => ${offer.recipient._idHex}`;
+          ul.appendChild(newLi);
+        } else {
+         //caller is not involved with the offer (no button added)
+          newLi.textContent = `${offer.initiator._idHex} => ${offer.recipient._idHex}`;
+          ul.appendChild(newLi);
+        } 
       
     })
   })
