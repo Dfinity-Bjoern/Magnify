@@ -1,9 +1,12 @@
 import List "mo:base/List";
+import Option "mo:base/Option";
 import Utils "Utils";
 
 actor {
 
     //1. TYPES
+
+    type RoomId = Nat;
 
     //1.1 Every offer is currently one to one so it has one initiator and one recipient
     type Offer = {
@@ -11,6 +14,7 @@ actor {
         recipient : Principal;
         offer : Text;
         initiatorAlias: Text;
+        roomId : RoomId;
     };
 
     //1.2 Every answer has only one offer and one person who can answer
@@ -18,6 +22,12 @@ actor {
         offer : Offer;
         answer : Text;
         answererAlias: Text;
+        roomId : RoomId;
+    };
+
+    type Room = {
+        roomId : RoomId;
+        participants : List.List<Principal>;
     };
 
     //2. OUR STATE
@@ -28,12 +38,61 @@ actor {
     //2.2 A List of acceptances
     flexible var acceptances : List.List<Answer> = List.nil();
 
+    flexible var roomIdSupply : Nat = 0;
+    //2.3 Our available rooms
+    flexible var rooms : List.List<Room> = List.nil();
+
+    func freshRoomId() : Nat {
+        roomIdSupply += 1;
+        roomIdSupply
+    };
+
     //3. OUR APIS
+
+    public shared {caller} func createRoom() : async RoomId {
+        let room = freshRoomId();
+        rooms := List.push({ roomId = room; participants = List.singleton(caller)}, rooms);
+        room
+    };
+
+    public query func listAllRooms() : async [RoomId] {
+        List.toArray(List.map(rooms, func({ roomId }: Room): RoomId = roomId))
+    };
+
+    public query func participants(room : RoomId) : async (?[Principal]) {
+        switch(findRoom(room)) {
+            case null null;
+            case (?r) ?(List.toArray(r.participants));
+        }
+    };
 
     //3.1 QUERY function for the front-end to get the Principal ID assigned to that user/caller
     //typially used when the user sets their alias at the beginning
     public query {caller} func ping() : async Principal {
         return caller
+    };
+
+    func isParticipantInRoom(participant : Principal, room : RoomId) : Bool {
+        switch (findRoom(room)) {
+            case null false;
+            case (?room) {
+                Option.isSome(
+                    List.find(room.participants, func (p : Principal): Bool = p == participant)
+                )
+            }
+        }
+    };
+
+    func findRoom(room : RoomId) : ?Room =
+        List.find(rooms, func ({ roomId }: Room): Bool = room == roomId);
+
+    func updateRoom(room : RoomId, f : (Room) -> Room) {
+        rooms := List.map(rooms, func (r : Room): Room { 
+            if (r.roomId == room) { 
+                f(r) 
+            } else { 
+                r
+            } })
     };
 
     //3.2 This UPDATE function is used by a user to send an "offer" to a second party to initiate the
@@ -43,13 +102,41 @@ actor {
     //1. Alice sends Offer to Bob
     //2. Bob answers Alice's offer
     //3. Alice and Bob are now connected
-    public shared {caller} func offer(partner : Principal, initiatorName: Text, sdp : Text) : async () {
+    public shared {caller} func offer(room : RoomId, partner : Principal, initiatorName: Text, sdp : Text) : async (?Text) {
+        if (Option.isNull(findRoom(room))) {
+            return ?"Room not found"
+        };
+
+        if (Option.isSome(List.find(openOffers, func (o : Offer) : Bool { 
+            o.roomId == room and 
+            (
+              (o.initiator == caller and o.recipient == partner) or 
+              (o.initiator == partner and o.recipient == caller)
+            )
+        }))) {
+            return ?"Already existing offer"
+        };
+        
+        if (not isParticipantInRoom(caller, room)) {
+            return ?"Caller not in room"
+        };
+
+        if (not isParticipantInRoom(partner, room)) {
+            updateRoom(room, func(r : Room) : Room { 
+                { roomId = r.roomId; 
+                  participants = List.push(partner, r.participants);
+                } 
+            })
+        };
+
         openOffers := List.push({
+            roomId = room;
             initiator = caller;
             recipient = partner;
             offer = sdp;
             initiatorAlias = initiatorName;
         }, openOffers);
+        null
     };
 
     //3.3 QUERY function to return the offers for the caller
@@ -61,6 +148,7 @@ actor {
         );
     };
 
+
     //3.4 this UPDATE function's argument is the index of the offers array that we should be accepting
     //This function is used only on existing offers. Once a user accepts an offer, then they will
     //be connected via WebRTC for video chat. They will not be connected until the offer is answered.
@@ -68,14 +156,19 @@ actor {
     //1. Alice sends Offer to Bob
     //2. Bob answers Alice's offer
     //3. Alice and Bob are now connected
-    public shared {caller} func answer(partner : Principal, answererAliasName: Text, sdp : Text) : async ?Text {
-        let offer = List.find(openOffers, matchOffer(partner, caller));
+    public shared {caller} func answer(room : RoomId, partner : Principal, answererAliasName: Text, sdp : Text) : async ?Text {
+        if (Option.isNull(findRoom(room))) {
+            return ?"Room not found"
+        };
+        
+        let offer = List.find(openOffers, matchOffer(room, partner, caller));
 
         switch offer {
             case null ?"No offer found";
             case (?myOffer) {
-                openOffers := Utils.listKeep(openOffers, matchOffer(partner, caller));
+                openOffers := Utils.listKeep(openOffers, matchOffer(room, partner, caller));
                 acceptances := List.push({
+                    roomId = room;
                     offer = myOffer;
                     answer = sdp;
                     answererAlias = answererAliasName;
@@ -98,9 +191,9 @@ actor {
 
     //4.1 A helper function used to check the list of offers and return those with the same
     //(initiator, recipient) tuple
-    func matchOffer(initiator : Principal, recipient : Principal) : (Offer) -> Bool {
+    func matchOffer(room : RoomId, initiator : Principal, recipient : Principal) : (Offer) -> Bool {
         func (offer : Offer) : Bool =
-            offer.initiator == initiator and offer.recipient == recipient
+            offer.roomId == room and offer.initiator == initiator and offer.recipient == recipient
     };
 
 };

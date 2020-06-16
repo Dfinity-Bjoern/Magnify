@@ -27,7 +27,12 @@ document.body.innerHTML = /*html*/`
   </div>
   <br>
   <br>
-  <div id="controls">
+  <div id="roomControls">
+    <button id="createRoomButton">Create Room</button>
+    <button id="refreshRoomList">Refresh Rooms</button>
+    <ul id="roomList"></ul>
+  </div>
+  <div id="controls" hidden="true">
     <label for=partnerInput>Partner:</label>
     <input id="partnerInput">
     <button id="offerButton" type="button">Offer</button>
@@ -39,7 +44,7 @@ document.body.innerHTML = /*html*/`
     <h2>Answers:</h2>
     <ul id="answers"></ul>
   <div>
-  <div id="videos">
+  <div id="videos" hidden="true">
     <video id="localVideo" autoplay></video>
     <video id="remoteVideo" autoplay></video>
   </div>
@@ -52,6 +57,7 @@ document.body.innerHTML = /*html*/`
 // across multiple JS functions... without having to re-read the HTML.
 
 let allOffers = []
+let allRooms = []
 
 let localStream
 let localVideo = $("#localVideo")
@@ -64,6 +70,7 @@ let waitForIceDelay
 let iceCandidates = []
 let callerId =  'TBD';
 let alias = '';
+let activeRoom;
 
 
 //3. FUNCTIONS
@@ -82,7 +89,7 @@ const sendOffer = recipient => {
       return rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.offer(recipient, alias, JSON.stringify({
+        magnify.offer(activeRoom, recipient, alias, JSON.stringify({
           ice: iceCandidates,
           description: rtcPeerConnection.localDescription
         }))
@@ -123,7 +130,7 @@ const sendAnswer = (offerIndex) => {
       return rtcPeerConnection.setLocalDescription(answer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.answer(offer.initiator, alias, JSON.stringify({
+        magnify.answer(activeRoom, offer.initiator, alias, JSON.stringify({
           description: rtcPeerConnection.localDescription,
           ice: iceCandidates
         }))
@@ -143,7 +150,7 @@ const onTrack = event => {
 // Set up the local streaming and execute the completion
 const setupLocalAndComplete = (completion) => {
   // TODO(Christoph): video to true
-  navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
 
@@ -263,14 +270,62 @@ $("#listAnswersButton").addEventListener("click", ev => {
   })
 })
 
+$("#refreshRoomList").addEventListener("click", () => {
+  magnify.listAllRooms().then(rooms => {
+    allRooms = rooms
+    refreshRooms()
+  })
+})
+
+$("#createRoomButton").addEventListener("click", () => {
+  magnify.createRoom().then(room => {
+    allRooms.push(room)
+    activeRoom = room
+    displayVideos()
+  })
+})
+
 
 //5. THING TO CALL AT ONLOAD
 
 //5.1 This function is called when the JS loads, the front-end asks the canister for a principal ID
 // it can use in future calls as an identifier
-magnify.ping().then(caller => {
-  // $("#callerId").innerText = `Hello ${caller._idHex}`;
-  console.log(`fetched the caller ID: ${caller._idHex}`);
-  //add it to the local variables (for easier retrieval in the front-end)
-  callerId = caller._idHex;
-})
+
+function displayVideos() {
+  $("#controls").hidden = false
+  $("#videos").hidden = false
+  $("#roomControls").hidden = true
+}
+
+function refreshRooms() {
+  const ul = $("#roomList");
+  ul.textContent = '';
+  allRooms.forEach(room => {
+    const newLi = document.createElement("li")
+    newLi.textContent = room;
+
+    //add button so the user can answer the offer
+    const useRoomButton = document.createElement("button");
+    useRoomButton.innerText = "Join";
+    newLi.appendChild(useRoomButton);
+    useRoomButton.addEventListener("click", ev => {
+      activeRoom = room
+      displayVideos()
+    });
+    ul.appendChild(newLi);
+  })
+}
+
+let callerP = magnify.ping()
+let roomsP = magnify.listAllRooms()
+callerP.then(caller => 
+  roomsP.then(rooms => {
+      // $("#callerId").innerText = `Hello ${caller._idHex}`;
+      console.log(`fetched the caller ID: ${caller._idHex}`);
+      //add it to the local variables (for easier retrieval in the front-end)
+      callerId = caller._idHex;
+      allRooms = rooms;
+      refreshRooms()
+}))
+
+
