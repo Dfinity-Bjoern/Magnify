@@ -148,7 +148,7 @@ const sendAnswer = (offerIndex) => {
       return rtcPeerConnection.setLocalDescription(answer)
     }).then(() => {
       waitForIceDelay = setTimeout(() => {
-        magnify.answer(offer.initiator, name, JSON.stringify({
+        magnify.answer(offer.initiator, alias, JSON.stringify({
           description: rtcPeerConnection.localDescription,
           ice: iceCones
         }))
@@ -241,14 +241,17 @@ $("#listOffersButton").addEventListener("click", ev => {
 
     offers.forEach((offer, index) => {
       console.log(`offer has index: ${index}`);
-      const newLi = document.createElement("li")
-      newLi.textContent = `${offer.initiatorAlias} (${offer.initiator._idHex}) => ${offer.recipient._idHex}`;
+      console.log(offer);
+      const newLi = document.createElement("li");
+      let offererText = (offer.initiator._idHex === callerId) ? 'you' : `${offer.initiatorAlias}`;
+      let recipientText = (offer.recipient._idHex === callerId) ? 'you' : `${offer.recipient._idHex}`;
+      newLi.textContent = `${offererText} => ${recipientText}     `;
       ul.appendChild(newLi);
 
       //add button so the user can answer the offer
       const newAnswerButton = document.createElement("button");
       newAnswerButton.id = `answerButton-${index}`;
-      newAnswerButton.innerText = `Answer offer #${index}`;
+      newAnswerButton.innerText = `Answer offer #${index} from  ${offererText}`;
       newLi.appendChild(newAnswerButton);
       //we use const in order to avoid closure/scope unpredictability
       //we the closure scope in the addEventListener
@@ -276,7 +279,7 @@ $("#listAnswersButton").addEventListener("click", ev => {
 
 magnify.ping().then(caller => {
   // $("#callerId").innerText = `Hello ${caller._idHex}`;
-  //add it to the local cache (for easier retrieval in the front-end)
   console.log(`fetched the caller ID: ${caller._idHex}`);
+  //add it to the local variables (for easier retrieval in the front-end)
   callerId = caller._idHex;
 })
