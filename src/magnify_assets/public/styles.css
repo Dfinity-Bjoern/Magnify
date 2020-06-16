@@ -87,6 +87,10 @@ main.videoPage {
   margin-right: 15px;
 }
 
+.principalHeader {
+  margin-top: 30px;
+}
+
 #principalDisplay {
   font-size: 1.2rem;
 }
@@ -94,7 +98,11 @@ main.videoPage {
 #inviteControls {
     display: flex;
     max-width: 600px;
-    margin: 0 auto;
+    margin: 10px auto;
+}
+
+#videos {
+  margin: 10px 0 20px 0;
 }
 
 input {

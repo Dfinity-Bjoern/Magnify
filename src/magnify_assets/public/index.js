@@ -38,7 +38,7 @@ const welcomePage = /*html*/`
     <input id="newRoomUser" placeholder="Your name"/>
     <button id="createNewRoom">Create</button>
   </div>
-  <h2>&hellip; or let someone invite you with</h2>
+  <h2 class="principalHeader">&hellip; or let someone invite you with</h2>
   <p id="principalDisplay">Loading...</p>
 </main>
 `;
