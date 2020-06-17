@@ -38,7 +38,7 @@ const welcomePage = /*html*/`
     <input id="newRoomUser" placeholder="Your name"/>
     <button id="createNewRoom">Create</button>
   </div>
-  <h2 class="principalHeader">&hellip; or let someone invite you with</h2>
+  <h2 class="principalHeader">&hellip; or let someone invite you by giving them this long string of nonsense which is your "Principal":</h2>
   <p id="principalDisplay">Loading...</p>
 </main>
 `;
@@ -75,6 +75,8 @@ let myConnections = []
 // Variables related to WebRTC
 let localStream
 let localVideo
+//We have multiple servers here because as we were testing, the Mozilla STUN server crashed...
+//So we use multiple for redundancy now
 let iceServers = { iceServers: [
   { urls: "stun:stun.services.mozilla.com" },
   { urls: "stun:stun.l.google.com:19302" },
