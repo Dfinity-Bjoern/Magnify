@@ -47,7 +47,11 @@ const videoPage = /*html*/`
 <main role="main" class="videoPage">
   <h1 class="heading">Magnify</h1>
   <div id="videos" class="flex-container">
-    <video id="localVideo" autoplay muted controls></video>
+    <div>
+      <video id="localVideo" autoplay muted controls></video>
+      <br/>
+      <span id="mylabel"></span>
+    </div>
   </div>
 
   <div id="inviteControls">
@@ -105,6 +109,7 @@ const sendOffer = (recipient, alias) => {
   myConnections.push(recipientId)
   console.log(`connecting to ${recipientId}`)
   setupPeerAndComplete(remote => {
+    remote.label.innerText = alias
     remote.rtcPeerConnection.createOffer().then(offer => {
       return remote.rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
@@ -120,12 +125,12 @@ const sendOffer = (recipient, alias) => {
     // Poll the answers until our offer is accepted. This should have a timeout at
     // some point.
     initiatorTimer = setInterval(() => {
-      let answers = magnify.answers(activeRoom).then(answers => {
+      magnify.answers(activeRoom).then(answers => {
         console.log(`Found ${answers.length} answers on the canister`)
         for (const answer of answers) {
           if (answer.offer.recipient._idHex == recipient._idHex) {
             var details = JSON.parse(answer.answer)
-            remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description)).then(() => {console.log("promise here")})
+            remote.rtcPeerConnection.setRemoteDescription(details.description)
             addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
             clearInterval(initiatorTimer)
           }
@@ -146,8 +151,18 @@ const sendAnswer = (offerIndex) => {
 
   setupPeerAndComplete(remote => {
     var details = JSON.parse(offer.offer)
-    remote.rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(details.description))
+    remote.rtcPeerConnection.setRemoteDescription(details.description)
     addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
+
+    // Set the name of the remote participant
+    magnify.participants(activeRoom).then(participants => {
+      allParticipants = participants[0]
+      for (const participant of allParticipants) {
+        if (participant.principal._idHex == offer.initiator._idHex) {
+          remote.label.innerText = participant.alias
+        }
+      }
+    })
 
     remote.rtcPeerConnection.createAnswer().then(answer => {
       return remote.rtcPeerConnection.setLocalDescription(answer)
@@ -191,7 +206,7 @@ function checkForAdditions() {
     allParticipants = participants[0]
     for (const participant of allParticipants) {
       if (!isParticipantInConnections(participant.principal) && participant.principal._idHex != callerId) {
-        console.log(`Sending an offer to ${participant.principal._idHex}`)
+        console.log(`Sending an offer to ${participant.alias} (${participant.principal._idHex})`)
         sendOffer(participant.principal, participant.alias)
       }
     }
@@ -213,14 +228,20 @@ const setupPeerAndComplete = (completion) => {
     rtcPeerConnection: new RTCPeerConnection(iceServers),
     iceCandidates: [],
     video: document.createElement("video"),
-    stream: new MediaStream()
+    stream: new MediaStream(),
+    label: document.createElement("span")
   }
+
+  let videoDiv = document.createElement("div")
+  videoDiv.appendChild(remote.video)
+  videoDiv.appendChild(document.createElement("br"))
+  videoDiv.appendChild(remote.label)
 
   // Add video element
   // remote.video.id = "remoteVideo-x"
   remote.video.autoplay = true
   remote.video.controls = true
-  $("#videos").appendChild(remote.video)
+  $("#videos").appendChild(videoDiv)
 
   // Set ICE handler for that remote. Needed for cross-machine calls
   // "ICE" is a concept for the WebRTC protocol. 
@@ -266,16 +287,6 @@ const addRemoteIceCandidates = (candidates, rtcPeerConnection) => {
   }
 }
 
-// Helper function: search the alias of a participant in the list returned by the canister.
-function getAliasForParticipant(principal) {
-  console.log(principal)
-  for (const participant of allParticipants) {
-    if (participant.principal._idHex == principal._idHex) {
-      return participant.alias
-    }
-  }
-}
-
 //4. UI AND EVENT HANDLERS
 
 // Helper function that loads the room list from the canister and creates join-buttons in the HTML
@@ -293,9 +304,9 @@ function refreshRooms() {
   allRooms.forEach(room => {
     const newLi = document.createElement("li")
     newLi.className = "room-item"
-    newLi.textContent = room;
+    newLi.textContent = `${room._1_} (${room._0_})`;
     newLi.addEventListener("click", () => {
-        activeRoom = room
+        activeRoom = room._0_
         setupVideoPage()
       })
     ul.appendChild(newLi);
@@ -307,6 +318,7 @@ function refreshRooms() {
 //5.1 This part is executed when the JS loads, the front-end asks the canister for a principal ID
 // it can use in future calls as an identifier. It also loads the initial room list.
 let roomPollingInterval;
+
 function setupWelcomePage() {
   document.body.innerHTML = welcomePage
   const createButton = $("#createNewRoom")
@@ -325,9 +337,9 @@ function setupWelcomePage() {
       ev.stopPropagation()
       ev.preventDefault()
     } else {
-      // TODO use the room name
+      let roomname = newRoomName.value
       let alias = newRoomUser.value;
-      magnify.createRoom(alias).then(room => {
+      magnify.createRoom(roomname, alias).then(room => {
         allRooms.push(room)
         activeRoom = room
         setupVideoPage()
@@ -359,6 +371,13 @@ function setupVideoPage() {
     magnify.participants(activeRoom).then(participants => {
       allParticipants = participants[0]
       console.log(participants[0])
+
+      // Find my own nickname and set label accordingly
+      for (const participant of allParticipants) {
+        if (participant.principal._idHex == callerId) {
+          $("#mylabel").innerText = participant.alias
+        }
+      }
     })
   })
 
@@ -368,13 +387,11 @@ function setupVideoPage() {
 }
 
 let callerP = magnify.ping()
-let roomsP = magnify.listAllRooms()
+let roomsP = magnify.listRooms()
 
-console.log("Hello friend")
 setupWelcomePage()
 callerP.then(caller => 
   roomsP.then(rooms => {
-      // $("#callerId").innerText = `Hello ${caller._idHex}`;
       console.log(`fetched the caller ID: ${caller._idHex}`);
       //add it to the local variables (for easier retrieval in the front-end)
       callerId = caller._idHex;

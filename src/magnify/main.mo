@@ -31,6 +31,7 @@ actor {
     // 1.4 A room has an identifier and a list of participants
     type Room = {
         roomId : RoomId;
+        name : Text;
         participants : List.List<Participant>;
     };
 
@@ -56,25 +57,21 @@ actor {
 
     //3.1 UPDATE function that creates a new room. Sets the alias of the creator
     // of the room and returns the room identifier.
-    public shared {caller} func createRoom(creatorAlias : Text) : async RoomId {
+    public shared {caller} func createRoom(roomName : Text, creatorAlias : Text) : async RoomId {
         let room = freshRoomId();
-        rooms := List.push({ roomId = room; participants = List.singleton({
+        rooms := List.push({ roomId = room; name = roomName; participants = List.singleton({
             principal = caller;
             alias = creatorAlias;
         })}, rooms);
         room
     };
 
-    //3.2 QUERY function that returns an array containing all room identifiers.
-    public query func listAllRooms() : async [RoomId] {
-        List.toArray(List.map(rooms, func({ roomId }: Room): RoomId = roomId))
-    };
-
-    public query {caller} func listRooms() : async [RoomId] {
+    //3.2 QUERY function that returns an array containing all room identifiers and names.
+    public query {caller} func listRooms() : async [(RoomId, Text)] {
         List.toArray(
             List.map(
                 List.filter(rooms, func (r : Room) : Bool { isParticipantInRoom(caller, r.roomId) }),
-                func({ roomId }: Room): RoomId = roomId
+                func(r : Room) : ((RoomId, Text)) { return (r.roomId, r.name) }
             )
         )
     };
@@ -136,15 +133,16 @@ actor {
         };
 
         if (not isParticipantInRoom(partner, room)) {
-            let name = switch (partnerName) {
+            let partnerAlias = switch (partnerName) {
                 case null return ?"No alias for partner given";
                 case (?name) name;
             };
             updateRoom(room, func(r : Room) : Room { 
-                { roomId = r.roomId; 
+                { roomId = r.roomId;
+                    name = r.name;
                     participants = List.push({
                       principal = partner;
-                      alias = name;
+                      alias = partnerAlias;
                     }, r.participants);
                 } 
             })
