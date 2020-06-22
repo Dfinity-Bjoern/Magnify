@@ -69,30 +69,22 @@ const videoPage = /*html*/`
 // across multiple JS functions... without having to re-read the HTML.
 
 // Variables related to application logic. Store results from querying the canister.
-let allOffers = []
-let allRooms = []
-let allParticipants = []
 let callerId = 'TBD';
 let activeRoom;
-let myConnections = []
+let remotes = []
 
 // Variables related to WebRTC
 let localStream
 let localVideo
 //We have multiple servers here because as we were testing, the Mozilla STUN server crashed...
 //So we use multiple for redundancy now
-let iceServers = { iceServers: [
+const iceServers = { iceServers: [
   { urls: "stun:stun.services.mozilla.com" },
   { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun.linphone.org" }
 ] }
-var remotes = []
 
-// Timers for polling and ICE handling
-let initiatorTimer
-let waitForIceDelay
+// Timer for polling for new participants
 let pollForAdditionsTimer
-
 
 //3. FUNCTIONS
 
@@ -105,15 +97,15 @@ let pollForAdditionsTimer
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
 const sendOffer = (recipient, alias) => {
-  const recipientId = recipient._idHex
-  myConnections.push(recipientId)
-  console.log(`connecting to ${recipientId}`)
+  console.log(`Sending offer to ${recipient._idHex}`)
+  
   setupPeerAndComplete(remote => {
+    remote.idHex = recipient._idHex
     remote.label.innerText = alias
     remote.rtcPeerConnection.createOffer().then(offer => {
       return remote.rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
-      waitForIceDelay = setTimeout(() => {
+      remote.waitForIceDelay = setTimeout(() => {
         magnify.offer(activeRoom, recipient, [alias], JSON.stringify({
           ice: remote.iceCandidates,
           description: remote.rtcPeerConnection.localDescription
@@ -124,15 +116,15 @@ const sendOffer = (recipient, alias) => {
 
     // Poll the answers until our offer is accepted. This should have a timeout at
     // some point.
-    initiatorTimer = setInterval(() => {
+    remote.initiatorTimer = setInterval(() => {
       magnify.answers(activeRoom).then(answers => {
         console.log(`Found ${answers.length} answers on the canister`)
         for (const answer of answers) {
-          if (answer.offer.recipient._idHex == recipient._idHex) {
+          if (answer.offer.recipient._idHex === recipient._idHex) {
             var details = JSON.parse(answer.answer)
             remote.rtcPeerConnection.setRemoteDescription(details.description)
             addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
-            clearInterval(initiatorTimer)
+            clearInterval(remote.initiatorTimer)
           }
         }
       })
@@ -144,24 +136,19 @@ const sendOffer = (recipient, alias) => {
 //this function's argument is the index of the offers array that we should be accepting
 //This function is used only on existing offers. Once a user accepts an offer, then they will
 //be connected via WebRTC for video chat. They will not be connected until the offer is answered.
-const sendAnswer = (offerIndex) => {
-  const offer = allOffers[offerIndex];
-  console.log(`sending answer for offer ${offerIndex} of ${allOffers.length}`);
-  myConnections.push(offer.initiator._idHex)
+const sendAnswer = (offer) => {
+  console.log(`sending answer to ${offer.initiator._idHex}`);
 
   setupPeerAndComplete(remote => {
+    remote.idHex = offer.initiator._idHex
+
     var details = JSON.parse(offer.offer)
     remote.rtcPeerConnection.setRemoteDescription(details.description)
     addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
 
     // Set the name of the remote participant
     magnify.participants(activeRoom).then(participants => {
-      allParticipants = participants[0]
-      for (const participant of allParticipants) {
-        if (participant.principal._idHex == offer.initiator._idHex) {
-          remote.label.innerText = participant.alias
-        }
-      }
+      remote.label.innerText = participants[0].find(p => p.principal._idHex === offer.initiator._idHex).alias
     })
 
     remote.rtcPeerConnection.createAnswer().then(answer => {
@@ -180,7 +167,6 @@ const sendAnswer = (offerIndex) => {
 
 // Set up a room and continue
 function setupRoomLocalAnd(completion) {
-  // TODO(Christoph): video to true
   navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
     localStream = stream
     localVideo.srcObject = stream
@@ -191,35 +177,21 @@ function setupRoomLocalAnd(completion) {
 }
 
 function checkForAdditions() {
-  // See whether there are outstanding offers
+  // Check whether there are outstanding offers
   magnify.offers(activeRoom).then(offers => {
     console.log(`Found ${offers.length} offers`)
-    allOffers = offers
-    offers.forEach((offer, index) => {
-      console.log("Sending an answer")
-      sendAnswer(index)
-    })
+    offers.forEach(offer => sendAnswer(offer))
   })
 
-  // See whether there are participants we're not connected with (and not callerId)
+  // Check whether we should be sending an offer
   magnify.participants(activeRoom).then(participants => {
-    allParticipants = participants[0]
-    for (const participant of allParticipants) {
-      if (!isParticipantInConnections(participant.principal) && participant.principal._idHex != callerId) {
+    for (const participant of participants[0]) {
+      if (!remotes.some(remote => remote.idHex === participant.principal._idHex) && participant.principal._idHex != callerId) {
         console.log(`Sending an offer to ${participant.alias} (${participant.principal._idHex})`)
         sendOffer(participant.principal, participant.alias)
       }
     }
   })
-}
-
-function isParticipantInConnections(participant) {
-  for (const connection of myConnections) {
-    if (connection == participant._idHex) {
-      return true
-    }
-  }
-  return false
 }
 
 // Set up the local streaming and execute the completion
@@ -229,7 +201,11 @@ const setupPeerAndComplete = (completion) => {
     iceCandidates: [],
     video: document.createElement("video"),
     stream: new MediaStream(),
-    label: document.createElement("span")
+    label: document.createElement("span"),
+    idHex: '',
+
+    initiatorTimer: null,
+    waitForIceDelay: null
   }
 
   let videoDiv = document.createElement("div")
@@ -290,18 +266,18 @@ const addRemoteIceCandidates = (candidates, rtcPeerConnection) => {
 //4. UI AND EVENT HANDLERS
 
 // Helper function that loads the room list from the canister and creates join-buttons in the HTML
-function refreshRooms() {
+function refreshRooms(rooms) {
   const ul = $("#roomList");
   if (!ul) return
   ul.textContent = '';
-  if (allRooms.length === 0) {
+  if (rooms.length === 0) {
     const newLi = document.createElement("li")
     newLi.className = "room-item__disabled"
     newLi.disabled = true
     newLi.textContent = "No rooms available";
     ul.appendChild(newLi);
   }
-  allRooms.forEach(room => {
+  rooms.forEach(room => {
     const newLi = document.createElement("li")
     newLi.className = "room-item"
     newLi.textContent = `${room._1_} (${room._0_})`;
@@ -326,10 +302,7 @@ function setupWelcomePage() {
   const newRoomUser = $("#newRoomUser")
 
   roomPollingInterval = setInterval(() => {
-    magnify.listRooms().then(rooms => {
-      allRooms = rooms;
-      refreshRooms()
-    })
+    magnify.listRooms().then(rooms => refreshRooms(rooms))
   }, 2000);
 
   createButton.addEventListener("click", ev => {
@@ -340,7 +313,6 @@ function setupWelcomePage() {
       let roomname = newRoomName.value
       let alias = newRoomUser.value;
       magnify.createRoom(roomname, alias).then(room => {
-        allRooms.push(room)
         activeRoom = room
         setupVideoPage()
       })
@@ -363,21 +335,11 @@ function setupVideoPage() {
   setupRoomLocalAnd(() => {
     magnify.offers(activeRoom).then(offers => {
       console.log(`Found ${offers.length} offers`)
-      allOffers = offers
-      offers.forEach((offer, index) => {
-        sendAnswer(index)
-      })
+      offers.forEach(offer => sendAnswer(offer))
     })
+    // Find my own nickname and set label accordingly
     magnify.participants(activeRoom).then(participants => {
-      allParticipants = participants[0]
-      console.log(participants[0])
-
-      // Find my own nickname and set label accordingly
-      for (const participant of allParticipants) {
-        if (participant.principal._idHex == callerId) {
-          $("#mylabel").innerText = participant.alias
-        }
-      }
+      $("#mylabel").innerText = participants[0].find(p => p.principal._idHex === callerId).alias
     })
   })
 
@@ -396,8 +358,5 @@ callerP.then(caller =>
       //add it to the local variables (for easier retrieval in the front-end)
       callerId = caller._idHex;
       $("#principalDisplay").innerText = callerId;
-      allRooms = rooms;
-      refreshRooms()
+      refreshRooms(rooms)
 }))
-
-
