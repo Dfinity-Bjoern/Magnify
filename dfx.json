@@ -1,34 +1,35 @@
 {
   "canisters": {
-    "magnify": {
-      "main": "src/magnify/main.mo",
+    "Magnify": {
+      "main": "src/Magnify/main.mo",
       "type": "motoko"
     },
-    "magnify_assets": {
+    "Magnify_assets": {
       "dependencies": [
-        "magnify"
+        "Magnify"
       ],
       "frontend": {
-        "entrypoint": "src/magnify_assets/public/index.js",
-        "output": "canisters/magnify_assets/assets"
+        "entrypoint": "src/Magnify_assets/src/index.html"
       },
       "source": [
-        "src/magnify_assets/assets"
+        "src/Magnify_assets/assets",
+        "dist/Magnify_assets/"
       ],
       "type": "assets"
     }
   },
   "defaults": {
     "build": {
-      "output": "canisters/",
+      "args": "",
       "packtool": ""
-    },
-    "start": {
-      "address": "127.0.0.1",
-      "port": 8000,
-      "serve_root": "canisters/magnify_assets/assets"
     }
   },
-  "dfx": "0.5.8",
+  "dfx": "0.8.4",
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
   "version": 1
 }
