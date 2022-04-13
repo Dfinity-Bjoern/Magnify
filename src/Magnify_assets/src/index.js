@@ -1,7 +1,44 @@
-import magnify from 'ic:canisters/magnify';
+import { Magnify } from "../../declarations/Magnify";
 import "./styles.css"
-import { CanisterId } from '@dfinity/agent';
+import { Actor, HttpAgent } from '@dfinity/agent';
+import { Principal } from "@dfinity/principal";
+import { Ed25519KeyIdentity } from "@dfinity/identity";
+import {
+  idlFactory as magnify_idl,
+  canisterId as magnify_id,
+} from "../../declarations/magnify";
 
+
+// Setting up interaction with Principal
+function newIdentity() {
+  const entropy = crypto.getRandomValues(new Uint8Array(32));
+  const identity = Ed25519KeyIdentity.generate(entropy);
+  localStorage.setItem("magnify", JSON.stringify(identity));
+  return identity;
+}
+
+function readIdentity() {
+  const stored = localStorage.getItem("magnify");
+  if (!stored) {
+    return newIdentity();
+  }
+  try {
+    return Ed25519KeyIdentity.fromJSON(stored);
+  } catch (error) {
+    console.log(error);
+    return newIdentity();
+  }
+}
+const identity = readIdentity();
+const principal_ = identity.getPrincipal();
+console.log("Principal", principal_);
+
+const agent = new HttpAgent({ identity });
+agent.fetchRootKey();
+const magnify = Actor.createActor(magnify_idl, {
+  agent,
+  canisterId : magnify_id
+});
 
 //0. PREP WORK & WORK AROUNDS
 // This is ergonomic short-hand so we do not need to have to keep writing "document.."
@@ -16,7 +53,7 @@ document.head.appendChild(link);
 
 // Sadness :(
 // We have to do this as a work-around because there is a bug in Candid currently
-const principalFromHex = hex => CanisterId.fromHex(hex)
+// const principalFromHex = hex => CanisterId.fromHex(hex)
 
 //1. HTML FOR THE FRONT-END
 // Note that the HTML is a string... that is because (for security reasons) we can only have index.js
@@ -60,7 +97,7 @@ const videoPage = /*html*/`
     <button id="invite">Invite</button>
   </div>
 </main>
-`;
+ `;
 
 
 //2. VARIABLES
@@ -69,13 +106,18 @@ const videoPage = /*html*/`
 // across multiple JS functions... without having to re-read the HTML.
 
 // Variables related to application logic. Store results from querying the canister.
-let callerId = 'TBD';
+let callerId = principal_.toHex();
 let activeRoom;
 let remotes = []
 
 // Variables related to WebRTC
 let localStream
 let localVideo
+
+// Variables to access html in frontend
+//const welcomePage = document.getElementsByClassName("welcomePage");
+//const videoPage = document.getElementsByClassName("videoPage");
+
 //We have multiple servers here because as we were testing, the Mozilla STUN server crashed...
 //So we use multiple for redundancy now
 const iceServers = { iceServers: [
@@ -97,16 +139,18 @@ let pollForAdditionsTimer
 //2. Bob answers Alice's offer
 //3. Alice and Bob are now connected
 const sendOffer = (recipient, alias) => {
-  console.log(`Sending offer to ${recipient._idHex}`)
+  console.log(`Sending offer to ${recipient}`)
   
   setupPeerAndComplete(remote => {
-    remote.idHex = recipient._idHex
+    remote.idHex = Principal.fromHex(String(recipient)).toHex()
     remote.label.innerText = alias
     remote.rtcPeerConnection.createOffer().then(offer => {
       return remote.rtcPeerConnection.setLocalDescription(offer)
     }).then(() => {
       remote.waitForIceDelay = setTimeout(() => {
-        magnify.offer(activeRoom, recipient, [alias], JSON.stringify({
+        console.log("The recipient's principal is", String(recipient))
+        console.log("The recipient's hex is: ", recipient)
+        magnify.offer(activeRoom, Principal.fromHex(String(recipient)), [alias], JSON.stringify({
           ice: remote.iceCandidates,
           description: remote.rtcPeerConnection.localDescription
         }))
@@ -120,12 +164,12 @@ const sendOffer = (recipient, alias) => {
       magnify.answers(activeRoom).then(answers => {
         console.log(`Found ${answers.length} answers on the canister`)
         for (const answer of answers) {
-          if (answer.offer.recipient._idHex === recipient._idHex) {
+          // if (answer.offer.recipient.toHex() === recipient && !remotes.some(remote => remote.idHex === answer.offer.initiator.toHex())) {
             var details = JSON.parse(answer.answer)
             remote.rtcPeerConnection.setRemoteDescription(details.description)
             addRemoteIceCandidates(details.ice, remote.rtcPeerConnection)
             clearInterval(remote.initiatorTimer)
-          }
+          // }
         }
       })
     }, 1000)
@@ -140,7 +184,7 @@ const sendAnswer = (offer) => {
   console.log(`sending answer to ${offer.initiator._idHex}`);
 
   setupPeerAndComplete(remote => {
-    remote.idHex = offer.initiator._idHex
+    remote.idHex = offer.initiator.toHex()
 
     var details = JSON.parse(offer.offer)
     remote.rtcPeerConnection.setRemoteDescription(details.description)
@@ -148,7 +192,7 @@ const sendAnswer = (offer) => {
 
     // Set the name of the remote participant
     magnify.participants(activeRoom).then(participants => {
-      remote.label.innerText = participants[0].find(p => p.principal._idHex === offer.initiator._idHex).alias
+      remote.label.innerText = participants[0].find(p => p.principal.toHex() === offer.initiator.toHex()).alias
     })
 
     remote.rtcPeerConnection.createAnswer().then(answer => {
@@ -180,14 +224,20 @@ function checkForAdditions() {
   // Check whether there are outstanding offers
   magnify.offers(activeRoom).then(offers => {
     console.log(`Found ${offers.length} offers`)
-    offers.forEach(offer => sendAnswer(offer))
+    offers.forEach(offer => {
+      if (!remotes.some(remote => remote.idHex === offer.initiator.toHex()) && offer.initiator.toHex() != callerId) {
+        sendAnswer(offer)
+      }
+    })
   })
 
   // Check whether we should be sending an offer
   magnify.participants(activeRoom).then(participants => {
+    console.log("These are the participants: ", participants)
+    console.log("remotes: ", remotes)
     for (const participant of participants[0]) {
-      if (!remotes.some(remote => remote.idHex === participant.principal._idHex) && participant.principal._idHex != callerId) {
-        console.log(`Sending an offer to ${participant.alias} (${participant.principal._idHex})`)
+      if (!remotes.some(remote => remote.idHex === participant.principal.toHex()) && participant.principal.toHex() != callerId) {
+        console.log(`Sending an offer to ${participant.alias} (${participant.principal})`)       
         sendOffer(participant.principal, participant.alias)
       }
     }
@@ -215,12 +265,15 @@ const setupPeerAndComplete = (completion) => {
 
   // Add video element
   // remote.video.id = "remoteVideo-x"
-  remote.video.autoplay = true
-  remote.video.controls = true
-  $("#videos").appendChild(videoDiv)
+  //if(!remotes.some(remote => remote.idHex))) {
+    remote.video.autoplay = true
+    remote.video.controls = true
+    $("#videos").appendChild(videoDiv)
+  //}
+
 
   // Set ICE handler for that remote. Needed for cross-machine calls
-  // "ICE" is a concept for the WebRTC protocol. 
+  // "ICE" is a concept for the WebRTC protocol.
   // ICE utilizes different technologies and protocols to overcome the challenges posed 
   // by different types of NAT mappings
   // It can be simplified with this example: 
@@ -248,7 +301,10 @@ const setupPeerAndComplete = (completion) => {
     remote.rtcPeerConnection.addTrack(track);
   }
 
-  remotes.push(remote)
+  if(!remotes.includes(remote)) {
+    remotes.push(remote)
+  }
+
   completion(remote)
 }
 
@@ -280,9 +336,9 @@ function refreshRooms(rooms) {
   rooms.forEach(room => {
     const newLi = document.createElement("li")
     newLi.className = "room-item"
-    newLi.textContent = `${room._1_} (${room._0_})`;
+    newLi.textContent = `${room[1]} (${room[0]})`;
     newLi.addEventListener("click", () => {
-        activeRoom = room._0_
+        activeRoom = room[0]
         setupVideoPage()
       })
     ul.appendChild(newLi);
@@ -312,6 +368,7 @@ function setupWelcomePage() {
     } else {
       let roomname = newRoomName.value
       let alias = newRoomUser.value;
+      console.log("The alias: ", alias)
       magnify.createRoom(roomname, alias).then(room => {
         activeRoom = room
         setupVideoPage()
@@ -339,12 +396,13 @@ function setupVideoPage() {
     })
     // Find my own nickname and set label accordingly
     magnify.participants(activeRoom).then(participants => {
-      $("#mylabel").innerText = participants[0].find(p => p.principal._idHex === callerId).alias
+      console.log("the participants are: ", participants[0][0].alias, " ", participants[0][0].principal, "callerId ", callerId  )
+      $("#mylabel").innerText = participants[0].find(p => p.principal.toHex() === callerId).alias
     })
   })
 
   inviteButton.addEventListener("click", ev => {
-    sendOffer(principalFromHex(invitePrincipal.value), inviteName.value)
+    sendOffer(invitePrincipal.value, inviteName.value)
   })
 }
 
@@ -352,11 +410,13 @@ let callerP = magnify.ping()
 let roomsP = magnify.listRooms()
 
 setupWelcomePage()
-callerP.then(caller => 
+//callerP.then(caller => 
   roomsP.then(rooms => {
-      console.log(`fetched the caller ID: ${caller._idHex}`);
+      console.log(`fetched the caller ID: ${principal_}`);
       //add it to the local variables (for easier retrieval in the front-end)
-      callerId = caller._idHex;
+      //callerId = principal_.toHex();
+      console.log("This is the current principal", callerId)
       $("#principalDisplay").innerText = callerId;
       refreshRooms(rooms)
-}))
+})
+

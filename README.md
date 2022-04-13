@@ -15,7 +15,7 @@ Before you build, deploy, and run the Magnify application, verify the following:
     To download and install the supported version of the DFINITY Canister SDK, run the following command:
 
     ```bash
-    DFX_VERSION=0.5.8 sh -ci "$(curl -fsSL https://sdk.dfinity.org/install.sh)"
+    DFX_VERSION=0.8.4 sh -ci "$(curl -fsSL https://sdk.dfinity.org/install.sh)"
     ```
 
 ## Clone the Magnify repository

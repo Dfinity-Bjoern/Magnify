@@ -57,20 +57,20 @@ actor {
 
     //3.1 UPDATE function that creates a new room. Sets the alias of the creator
     // of the room and returns the room identifier.
-    public shared {caller} func createRoom(roomName : Text, creatorAlias : Text) : async RoomId {
+    public shared(msg) func createRoom(roomName : Text, creatorAlias : Text) : async RoomId {
         let room = freshRoomId();
-        rooms := List.push({ roomId = room; name = roomName; participants = List.singleton({
-            principal = caller;
+        rooms := List.push({ roomId = room; name = roomName; participants = List.make({
+            principal = msg.caller;
             alias = creatorAlias;
         })}, rooms);
         room
     };
 
     //3.2 QUERY function that returns an array containing all room identifiers and names.
-    public query {caller} func listRooms() : async [(RoomId, Text)] {
+    public shared(msg) func listRooms() : async [(RoomId, Text)] {
         List.toArray(
             List.map(
-                List.filter(rooms, func (r : Room) : Bool { isParticipantInRoom(caller, r.roomId) }),
+                List.filter(rooms, func (r : Room) : Bool { isParticipantInRoom(msg.caller, r.roomId) }),
                 func(r : Room) : ((RoomId, Text)) { return (r.roomId, r.name) }
             )
         )
@@ -87,8 +87,8 @@ actor {
 
     //3.4 QUERY function for the front-end to get the Principal ID assigned to that user/caller
     //typially used when the user sets their alias at the beginning
-    public query {caller} func ping() : async Principal {
-        return caller
+    public shared(msg) func ping() : async Principal {
+        return msg.caller
     };
 
     //3.5 This UPDATE function is used by a user to send an "offer" to a second party to initiate the
@@ -103,7 +103,7 @@ actor {
     // is added to the room if necessary. In that case, the partnerName specified by the initiator
     // is used as the alias of the recipient. If the offer already exists in that room in either
     // the same or the opposite direction, adding it again fails.
-    public shared {caller} func offer(room : RoomId, partner : Principal, partnerName : ?Text, sdp : Text) : async (?Text) {
+    public shared(msg) func offer(room : RoomId, partner : Principal, partnerName : ?Text, sdp : Text) : async (?Text) {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
         };
@@ -111,8 +111,8 @@ actor {
         if (Option.isSome(List.find(openOffers, func (o : Offer) : Bool { 
             o.roomId == room and 
             (
-              (o.initiator == caller and o.recipient == partner) or 
-              (o.initiator == partner and o.recipient == caller)
+              (o.initiator == msg.caller and o.recipient == partner) or 
+              (o.initiator == partner and o.recipient == msg.caller)
             )
         }))) {
             return ?"Already existing offer"
@@ -121,14 +121,14 @@ actor {
         if (Option.isSome(List.find(acceptances, func (a : Answer) : Bool { 
             a.offer.roomId == room and 
             (
-              (a.offer.initiator == caller and a.offer.recipient == partner) or 
-              (a.offer.initiator == partner and a.offer.recipient == caller)
+              (a.offer.initiator == msg.caller and a.offer.recipient == partner) or 
+              (a.offer.initiator == partner and a.offer.recipient == msg.caller)
             )
         }))) {
             return ?"Already existing accepted offer"
         };
 
-        if (not isParticipantInRoom(caller, room)) {
+        if (not isParticipantInRoom(msg.caller, room)) {
             return ?"Caller not in room"
         };
 
@@ -150,7 +150,7 @@ actor {
 
         openOffers := List.push({
             roomId = room;
-            initiator = caller;
+            initiator = msg.caller;
             recipient = partner;
             offer = sdp;
         }, openOffers);
@@ -158,10 +158,10 @@ actor {
     };
 
     //3.6 QUERY function to return the offers for the caller
-    public query {caller} func offers(room : RoomId) : async [Offer] {
+    public shared(msg) func offers(room : RoomId) : async [Offer] {
         return List.toArray(
             List.filter(openOffers, func (offer : Offer) : Bool {
-                offer.roomId == room and offer.recipient == caller
+                offer.roomId == room and offer.recipient == msg.caller
             })
         );
     };
@@ -173,17 +173,17 @@ actor {
     // 1. Alice sends Offer to Bob
     // 2. Bob answers Alice's offer
     // 3. Alice and Bob are now connected
-    public shared {caller} func answer(room : RoomId, partner : Principal, sdp : Text) : async ?Text {
+    public shared(msg) func answer(room : RoomId, partner : Principal, sdp : Text) : async ?Text {
         if (Option.isNull(findRoom(room))) {
             return ?"Room not found"
         };
         
-        let offer = List.find(openOffers, matchOffer(room, partner, caller));
+        let offer = List.find(openOffers, matchOffer(room, partner, msg.caller));
 
         switch offer {
             case null ?"No offer found";
             case (?myOffer) {
-                openOffers := Utils.listKeep(openOffers, matchOffer(room, partner, caller));
+                openOffers := Utils.listKeep(openOffers, matchOffer(room, partner, msg.caller));
                 acceptances := List.push({
                     offer = myOffer;
                     answer = sdp;
@@ -194,10 +194,10 @@ actor {
     };
 
     //3.8 This QUERY function returns the answers for the caller
-    public query {caller} func answers(room : RoomId) : async [Answer] {
+    public shared(msg) func answers(room : RoomId) : async [Answer] {
         return List.toArray(
             List.filter(acceptances, func (answer : Answer) : Bool {
-                answer.offer.roomId == room and answer.offer.initiator == caller
+                answer.offer.roomId == room and answer.offer.initiator == msg.caller
             })
         );
     };
